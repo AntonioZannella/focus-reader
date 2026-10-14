@@ -1,0 +1,3759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --color-background: #0a0a0b;
+    --color-stage-glow: #1d1d21;
+    --color-surface: #161618;
+    --color-surface-hover: #222226;
+    --color-border: #2a2a2f;
+    --color-text: #ededf0;
+    --color-text-muted: #8b8b94;
+    --color-active-background: #ededf0;
+    --color-active-text: #0a0a0b;
+    --color-focus: #6ea8fe;
+    --color-error: #ff6b6b;
+    --color-warning: #f0b429;
+    --color-chunk-text: #ffffff;
+    --color-chunk-outline: #000000;
+    --color-range-start: #2f9e44;
+    --color-range-end: #e03131;
+    --color-range-between: #4d4312;
+    --color-range-text: #ffffff;
+    --color-short-vowel: #ff6fb5;
+    --color-welded: #4ade80;
+    --color-affix: #facc15;
+
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-chunk: "Montserrat", "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .app {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 16px 64px;
+  }
+
+  /* ---------- Mode tabs: Normal / Education ---------- */
+  .mode-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding-top: 16px;
+  }
+  .mode-tab {
+    min-width: 120px;
+  }
+  .mode-tab[aria-selected="true"] {
+    background-color: var(--color-active-background);
+    color: var(--color-active-text);
+    border-color: var(--color-active-background);
+  }
+  /* Education mode: short vowels in the caption */
+  .short-vowel {
+    color: var(--color-short-vowel);
+  }
+  .welded {
+    color: var(--color-welded);
+  }
+  /* a thin box around a prefix or suffix; sized in em so it scales with the caption */
+  .affix {
+    /* inline-block with a short line height: the box hugs the letters
+       instead of the whole line, so it doesn't overlap the next line */
+    display: inline-block;
+    line-height: 0.92;
+    outline: 0.035em solid var(--color-affix);
+    outline-offset: 0.03em;
+    border-radius: 0.1em;
+  }
+  /* Anything marked education-only appears in Education mode only. */
+  body:not(.mode-education) .education-only {
+    display: none !important;
+  }
+
+  /* ---------- Stage: the current chunk ---------- */
+  /* Fixed height so wrapping multi-word chunks never push the controls around. */
+  .stage {
+    position: relative;
+    height: max(46vh, 380px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 32px 0;
+    background: radial-gradient(ellipse at center, var(--color-stage-glow) 0%, var(--color-background) 70%);
+  }
+  #word-display {
+    font-family: var(--font-chunk);
+    font-weight: 900;
+    /* --caption-scale: the Size buttons */
+    font-size: calc(clamp(40px, 9.4vw, 88px) * var(--caption-scale, 1));
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    text-align: center;
+    color: var(--color-chunk-text);
+    /* stroke is centered on the glyph edge and paint-order puts it behind the
+       fill, so ~0.11em shows outside; the hard offset shadow thickens the
+       bottom-right edge like the reference captions */
+    -webkit-text-stroke: 0.22em var(--color-chunk-outline);
+    paint-order: stroke fill;
+    text-shadow: 0.03em 0.05em 0 var(--color-chunk-outline);
+    min-height: 1.1em;
+    overflow-wrap: anywhere;
+  }
+  #loading-indicator {
+    display: none;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 16px;
+  }
+  /* Playback reached a section whose audio isn't ready: shown in focus mode
+     too (it's in the stage), with its own Pause, instead of the paused hint. */
+  #preparing-notice {
+    display: none;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 16px;
+  }
+  #preparing-notice button {
+    margin-left: 8px;
+  }
+  body.focus-mode.audio-paused.waiting-for-section #focus-paused-hint {
+    display: none;
+  }
+  .library-offline-note {
+    color: var(--color-text-muted);
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  #error-message {
+    display: none;
+    text-align: center;
+    font-size: 16px;
+    color: var(--color-error);
+  }
+  #error-message button {
+    margin-left: 8px;
+  }
+
+  /* ---------- Focus mode (while playing) ---------- */
+  body.focus-mode {
+    overflow: hidden;
+  }
+  body.focus-mode .controls,
+  body.focus-mode .panel,
+  body.focus-mode .mode-tabs {
+    display: none;
+  }
+  body.focus-mode .app {
+    padding-bottom: 0;
+  }
+  body.focus-mode .stage {
+    height: 100vh;
+    height: 100dvh;
+  }
+  /* Shown only when focus mode is left on by a programmatic pause (e.g. the
+     Play Selection auto-stop), so the empty screen never looks stuck.
+     Absolutely positioned so it doesn't nudge the chunk. */
+  #focus-paused-hint {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 12%;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    letter-spacing: 0.04em;
+  }
+  body.focus-mode.audio-paused #focus-paused-hint {
+    display: block;
+  }
+  /* Step 32: an equation shown in place of the caption while playback holds
+     on it; plain and smaller, since equations are long. The paused hint
+     stays hidden: the hold is not a pause by the reader. */
+  #word-display.equation {
+    font-family: inherit;
+    font-weight: 600;
+    font-size: calc(clamp(20px, 3.6vw, 34px) * var(--caption-scale, 1));
+    line-height: 1.4;
+    -webkit-text-stroke: 0;
+    text-shadow: none;
+    white-space: pre-wrap;
+  }
+  body.focus-mode.audio-paused.equation-hold #focus-paused-hint {
+    display: none;
+  }
+
+  /* ---------- Controls ---------- */
+  button {
+    font: inherit;
+    font-size: 14px;
+    color: var(--color-text);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+  }
+  button:hover:not(:disabled) {
+    background-color: var(--color-surface-hover);
+  }
+  /* Filled (light) buttons keep their fill on hover; the generic hover above
+     would otherwise put their dark text on a dark background. */
+  .speed-button.active:hover, .chunk-button.active:hover, .size-button.active:hover,
+  .mode-tab[aria-selected="true"]:hover, #play-pause-button:hover, #start-button:hover {
+    background-color: var(--color-active-background);
+    opacity: 0.88;
+  }
+  button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .speed-button.active, .chunk-button.active, .size-button.active {
+    font-weight: 600;
+    background-color: var(--color-active-background);
+    border-color: var(--color-active-background);
+    color: var(--color-active-text);
+  }
+  .controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 0 32px;
+  }
+  .transport {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #play-pause-button {
+    min-width: 96px;
+    padding: 10px 22px;
+    font-size: 16px;
+    font-weight: 600;
+    background-color: var(--color-active-background);
+    border-color: var(--color-active-background);
+    color: var(--color-active-text);
+  }
+  .control-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .control-label {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 4px;
+  }
+  .control-row button {
+    padding: 5px 11px;
+    font-size: 13px;
+  }
+  #audio-player {
+    width: 100%;
+    max-width: 480px;
+    height: 36px;
+  }
+
+  /* ---------- Panels ---------- */
+  .panel {
+    border-top: 1px solid var(--color-border);
+    padding: 24px 0;
+  }
+  .panel-heading {
+    margin: 0 0 12px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  textarea, input[type="text"] {
+    font: inherit;
+    color: var(--color-text);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  textarea {
+    display: block;
+    width: 100%;
+    resize: vertical;
+    line-height: 1.6;
+  }
+  textarea::placeholder, input::placeholder {
+    color: var(--color-text-muted);
+  }
+  .input-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  #start-button {
+    font-weight: 600;
+    background-color: var(--color-active-background);
+    border-color: var(--color-active-background);
+    color: var(--color-active-text);
+  }
+  /* sits with the playback controls so it's on screen as soon as you pause */
+  #storage-warning, #revision-notice {
+    display: none;
+    max-width: 520px;
+    text-align: center;
+    padding: 10px 12px;
+    border: 1px solid var(--color-warning);
+    border-radius: 10px;
+    color: var(--color-warning);
+    font-size: 14px;
+  }
+  #storage-warning button, #revision-notice button {
+    margin-left: 8px;
+  }
+  .citations-option {
+    color: var(--color-text-muted);
+    font-size: 14px;
+  }
+  #upload-error {
+    display: none;
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--color-error);
+  }
+  #naming-prompt {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background-color: var(--color-surface);
+  }
+  #naming-prompt input {
+    margin: 0 6px;
+  }
+  #naming-prompt button {
+    margin-top: 4px;
+  }
+
+  /* ---------- Full document view ---------- */
+  /* Shown once a document is open in the player (its words are clickable). */
+  #reading-entry-points {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .entry-label {
+    color: var(--color-text-muted);
+    font-size: 14px;
+  }
+  #entry-hint {
+    flex-basis: 100%;
+    color: var(--color-text-muted);
+    font-size: 14px;
+  }
+  #entry-hint:empty {
+    display: none;
+  }
+  #page-controls {
+    margin-top: 16px;
+  }
+  .page-nav, .page-search {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  #page-counter {
+    min-width: 110px;
+    text-align: center;
+  }
+  #page-input {
+    width: 70px;
+  }
+  #search-input {
+    flex: 1 1 240px;
+  }
+  #search-results {
+    max-height: 30vh;
+    overflow-y: auto;
+    font-size: 14px;
+  }
+  #search-results .search-summary {
+    color: var(--color-text-muted);
+    margin: 4px 0;
+  }
+  #search-results button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 2px 0;
+    white-space: normal;
+  }
+  .page-note {
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+  /* equations aren't read aloud: shown where they belong, set apart */
+  .equation-block {
+    display: block;
+    margin: 8px 0;
+    padding: 6px 10px;
+    border-left: 3px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 15px;
+  }
+  .equation-inline {
+    color: var(--color-text-muted);
+    font-size: 15px;
+  }
+  .document-word.search-hit {
+    outline: 2px solid var(--color-warning);
+    border-radius: 3px;
+  }
+  #full-document-view {
+    display: none;
+    margin: 16px 0 0;
+    padding: 16px 18px;
+    max-height: 50vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: inherit;
+    font-size: 17px;
+    line-height: 1.75;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+  }
+  .document-word {
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  .document-word:hover {
+    background-color: var(--color-active-background);
+    color: var(--color-active-text);
+  }
+  .document-word.range-between {
+    background-color: var(--color-range-between);
+    color: var(--color-text);
+  }
+  .document-word.range-start {
+    background-color: var(--color-range-start);
+    color: var(--color-range-text);
+  }
+  .document-word.range-end {
+    background-color: var(--color-range-end);
+    color: var(--color-range-text);
+  }
+
+  /* ---------- Library ---------- */
+  .library-entry {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background-color: var(--color-surface);
+  }
+  .library-entry-name {
+    cursor: pointer;
+    font-weight: 600;
+    flex: 1 1 auto;
+  }
+  .library-entry-name:hover {
+    text-decoration: underline;
+  }
+  .library-entry-size,
+  .library-entry-name + span {
+    color: var(--color-text-muted);
+    font-size: 13px;
+  }
+  .library-entry input {
+    flex: 1 1 auto;
+    padding: 5px 10px;
+  }
+  .library-entry button {
+    padding: 4px 11px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <nav class="mode-tabs" role="tablist" aria-label="Mode">
+    <button class="mode-tab" role="tab" data-mode="normal" aria-selected="true">Normal</button>
+    <button class="mode-tab" role="tab" data-mode="education" aria-selected="false">Education</button>
+  </nav>
+  <section class="stage">
+    <div id="word-display"></div>
+    <div id="focus-paused-hint">Paused · press Space to resume</div>
+    <div id="loading-indicator">Generating audio…</div>
+    <div id="preparing-notice">
+      <span id="preparing-notice-text">Preparing the next section…</span>
+      <button id="preparing-notice-pause">Pause</button>
+      <button id="preparing-notice-cancel">Cancel</button>
+    </div>
+    <div id="error-message">
+      <span id="error-text">Something went wrong generating audio, try again</span>
+      <button id="retry-button">Retry</button>
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="transport">
+      <button id="back-button">Back 10</button>
+      <button id="play-pause-button">Play</button>
+      <button id="forward-button">Forward 10</button>
+    </div>
+    <div id="speed-buttons" class="control-row">
+      <span class="control-label">Speed</span>
+      <button class="speed-button" data-speed="0.25">0.25x</button>
+      <button class="speed-button" data-speed="0.5">0.5x</button>
+      <button class="speed-button" data-speed="0.75">0.75x</button>
+      <button class="speed-button active" data-speed="1">1x</button>
+      <button class="speed-button" data-speed="1.25">1.25x</button>
+      <button class="speed-button" data-speed="1.5">1.5x</button>
+      <button class="speed-button" data-speed="1.75">1.75x</button>
+      <button class="speed-button" data-speed="2">2x</button>
+    </div>
+    <div id="chunk-buttons" class="control-row">
+      <span class="control-label">Chunk</span>
+      <button class="chunk-button active" data-chunk-size="0">Phrase</button>
+      <button class="chunk-button" data-chunk-size="1">1 word</button>
+      <button class="chunk-button" data-chunk-size="2">2 words</button>
+      <button class="chunk-button" data-chunk-size="3">3 words</button>
+      <button class="chunk-button" data-chunk-size="4">4 words</button>
+      <button class="chunk-button" data-chunk-size="5">5 words</button>
+    </div>
+    <div id="size-buttons" class="control-row">
+      <span class="control-label">Size</span>
+      <button class="size-button" data-scale="0.7">Small</button>
+      <button class="size-button active" data-scale="1">Medium</button>
+      <button class="size-button" data-scale="1.3">Large</button>
+      <button class="size-button" data-scale="1.6">Extra large</button>
+    </div>
+    <audio id="audio-player" controls></audio>
+    <div id="revision-notice">
+      <span id="revision-notice-text"></span>
+      <button id="revision-notice-dismiss">Dismiss</button>
+    </div>
+    <div id="storage-warning">
+      <span id="storage-warning-text"></span>
+      <button id="storage-warning-dismiss">Dismiss</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel-heading">Text</h2>
+    <textarea id="text-input" rows="8" placeholder="Paste text here..."></textarea>
+    <div class="input-actions">
+      <button id="start-button">Start</button>
+      <button id="upload-button">Upload .txt</button>
+      <input type="file" id="file-input" accept=".txt,text/plain" hidden>
+      <button id="upload-pdf-button">Upload PDF</button>
+      <input type="file" id="pdf-input" accept=".pdf,application/pdf" hidden>
+      <label class="citations-option"><input type="checkbox" id="strip-citations-input"> Leave out citations</label>
+      <button id="toggle-full-document-button">Show Full Document</button>
+    </div>
+    <div id="upload-error"></div>
+    <div id="reading-entry-points">
+      <span class="entry-label">Start reading:</span>
+      <button id="start-from-beginning-button">Start from Beginning</button>
+      <button id="find-start-point-button">Find Start Point</button>
+      <button id="select-mode-button">Select Range: Off</button>
+      <button id="play-selection-button" disabled>Play Range</button>
+      <div id="entry-hint"></div>
+    </div>
+    <div id="naming-prompt" style="display: none;">
+      Name this document:
+      <input type="text" id="document-name-input" placeholder="e.g. Chapter 1">
+      <button id="confirm-name-button">Continue</button>
+      <button id="skip-name-button">Skip (don't save)</button>
+    </div>
+    <div id="page-controls" style="display: none;">
+      <div class="page-nav">
+        <button id="previous-page-button">Previous Page</button>
+        <span id="page-counter">Page 1 of 1</span>
+        <button id="next-page-button">Next Page</button>
+        <label>Go to page <input type="number" id="page-input" min="1" step="1"></label>
+        <button id="go-to-page-button">Go</button>
+      </div>
+      <div class="page-search">
+        <input type="search" id="search-input" placeholder="Search the whole document">
+        <button id="search-button">Search</button>
+      </div>
+      <div id="search-results"></div>
+    </div>
+    <pre id="full-document-view"></pre>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel-heading">Library</h2>
+    <div id="library-list"></div>
+    <p class="library-offline-note">Audio is saved in this browser part by part, as it's prepared for listening. Only saved parts play without an internet connection; a document in the library may not have all of its audio saved.</p>
+  </section>
+</main>
+
+  <script src="alignment.js"></script>
+  <script>
+    const BACKEND_URL = "http://127.0.0.1:5001/synthesize";
+    const audioPlayer = document.getElementById("audio-player");
+    const playPauseButton = document.getElementById("play-pause-button");
+    const wordDisplay = document.getElementById("word-display");
+    const loadingIndicator = document.getElementById("loading-indicator");
+    const errorMessage = document.getElementById("error-message");
+    let words = [];
+    // The exact text the current `words` array was synthesized from.
+    let synthesizedText = null;
+    let chunkSize = 0; // words per caption; 0 = a phrase at a time (the default)
+    let hasStarted = false;
+    let currentDocumentId = null;
+    // The library section being played (null for an unsaved document); its
+    // wordStart turns positions in `words` into document-wide word indices.
+    let currentSection = null;
+    // Where the text in the box came from: "text" (typed or pasted) or "txt".
+    let currentSourceType = "text";
+    let positionSaveIntervalId = null;
+
+    // Library storage (IndexedDB). Version 2 separates documents from their
+    // audio sections:
+    //   documents: {id, schema, name, sourceType ("text" | "txt" | "pdf"),
+    //     text, textRevision, words: [{word, start, end}] (the document-wide
+    //     word indices; start/end are character offsets into text, null if
+    //     not found), pages (PDF page mapping, null for text),
+    //     equationMarkers, lastOpenedAt, positionWordIndex (-1 = not started)}
+    //   sections: {id, documentId, textRevision, wordStart, wordEnd (global
+    //     word range, end exclusive), status, audioBlob, durationMs,
+    //     timings: [{wordIndex (global), word, start_ms, end_ms}]}
+    // A section's audio and its timings live in one record, so they are
+    // always written together. Version 1 stored one "documents" record per
+    // entry with its text, timings ("words") and audioBlob; upgradeLibrary
+    // migrates those.
+    const LIBRARY_DB_NAME = "FocusReaderLibrary";
+    const LIBRARY_DB_VERSION = 2;
+    const DOCUMENTS_STORE = "documents";
+    const SECTIONS_STORE = "sections";
+    const DOCUMENT_SCHEMA = 2;
+    const SECTION_READY = "ready"; // audio and timings saved
+    const SECTION_MISSING = "missing"; // audio not generated yet (or couldn't be saved)
+
+    // One shared connection. If another tab needs to upgrade the database,
+    // this one closes and reopens on its next use instead of blocking it.
+    let libraryDBPromise = null;
+
+    function openLibraryDB() {
+      if (!libraryDBPromise) {
+        libraryDBPromise = new Promise((resolve, reject) => {
+          const request = indexedDB.open(LIBRARY_DB_NAME, LIBRARY_DB_VERSION);
+          request.onupgradeneeded = (event) => {
+            upgradeLibrary(request.result, request.transaction, event.oldVersion);
+          };
+          request.onsuccess = () => {
+            const db = request.result;
+            db.onversionchange = () => {
+              db.close();
+              libraryDBPromise = null;
+            };
+            resolve(db);
+          };
+          request.onerror = () => {
+            libraryDBPromise = null;
+            reject(request.error);
+          };
+          request.onblocked = () => {
+            console.warn("Library upgrade is waiting for another Focus Reader tab to close.");
+          };
+        });
+      }
+      return libraryDBPromise;
+    }
+
+    // Runs inside the upgrade's versionchange transaction, so the migration is
+    // all or nothing: if any write fails, or the browser closes part-way, the
+    // whole transaction rolls back, the database stays at version 1 with every
+    // old record intact, and the migration runs again on the next open.
+    // Records already in the new shape are skipped.
+    function upgradeLibrary(db, transaction, oldVersion) {
+      if (!db.objectStoreNames.contains(DOCUMENTS_STORE)) {
+        db.createObjectStore(DOCUMENTS_STORE, { keyPath: "id", autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains(SECTIONS_STORE)) {
+        const sectionStore = db.createObjectStore(SECTIONS_STORE, { keyPath: "id", autoIncrement: true });
+        sectionStore.createIndex("documentId", "documentId");
+      }
+      if (oldVersion < 1) {
+        return; // a new, empty library
+      }
+      const documentStore = transaction.objectStore(DOCUMENTS_STORE);
+      const sectionStore = transaction.objectStore(SECTIONS_STORE);
+      documentStore.openCursor().onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor) {
+          return;
+        }
+        if (cursor.value.schema !== DOCUMENT_SCHEMA) {
+          const { documentRecord, section } = migrateLegacyEntry(cursor.value);
+          cursor.update(documentRecord);
+          sectionStore.add(section);
+        }
+        cursor.continue();
+      };
+    }
+
+    // A version 1 entry becomes a document with one section covering all of
+    // it. Its word indexing is kept exactly (the saved position indexes the
+    // same words), and so are its audio and timings. An entry without saved
+    // audio gets a section marked missing, generated when it's next opened.
+    // A malformed field (e.g. a damaged word list) is replaced by an empty
+    // value rather than throwing: an exception would abort the whole upgrade
+    // (safely, but then the library could never open).
+    function migrateLegacyEntry(record) {
+      const text = typeof record.text === "string" ? record.text : "";
+      const timings = Array.isArray(record.words)
+        ? record.words.filter((w) => w && typeof w.word === "string" && Number.isFinite(w.start_ms) && Number.isFinite(w.end_ms))
+        : [];
+      const documentRecord = makeDocumentRecord({
+        id: record.id,
+        name: typeof record.name === "string" && record.name ? record.name : "Untitled",
+        sourceType: "text",
+        text,
+        words: documentWordsFromTimings(text, timings),
+        positionWordIndex: Number.isInteger(record.positionWordIndex) ? record.positionWordIndex : -1,
+        lastOpenedAt: Number.isFinite(record.lastOpenedAt) ? record.lastOpenedAt : 0,
+      });
+      const section = record.audioBlob instanceof Blob && timings.length > 0
+        ? makeReadySection(record.id, documentRecord, record.audioBlob, timings, null)
+        : makeMissingSection(record.id, documentRecord);
+      return { documentRecord, section };
+    }
+
+    // Document words. A new document's words are its text's whitespace-
+    // separated words with their character ranges: its stable, document-wide
+    // word indices, whatever the speech engine later does with them. A
+    // document migrated from version 1 keeps the speech engine's words it was
+    // indexed by (documentWordsFromTimings), so its saved position and section
+    // boundaries don't move.
+    function makeDocumentRecord({ id, name, sourceType, text, words, positionWordIndex = -1, lastOpenedAt = Date.now() }) {
+      const documentRecord = {
+        schema: DOCUMENT_SCHEMA,
+        name,
+        sourceType,
+        text,
+        textRevision: 1,
+        words,
+        pages: null,
+        equationMarkers: [],
+        lastOpenedAt,
+        positionWordIndex,
+      };
+      if (id !== undefined) {
+        documentRecord.id = id;
+      }
+      return documentRecord;
+    }
+
+    // A document from a PDF, from the backend's /extract-pdf result: its
+    // cleaned reading text; its words with their character ranges and the
+    // physical page (1 = the file's first page, whatever number is printed on
+    // it) each came from; `pages.count`, the file's page count (pages with no
+    // text still count); and its equation markers, anchored to word
+    // boundaries (afterWord -1 = before the first word).
+    function makePdfDocumentRecord(name, extraction, { citationsStripped = false } = {}) {
+      const documentRecord = makeDocumentRecord({
+        name,
+        sourceType: "pdf",
+        text: extraction.text,
+        words: extraction.words.map((w) => ({ word: w.word, start: w.start, end: w.end, page: w.page })),
+      });
+      documentRecord.pages = { count: extraction.page_count };
+      documentRecord.equationMarkers = (extraction.equations || []).map((marker) => ({
+        text: marker.text,
+        page: marker.page,
+        bbox: marker.bbox || null,
+        afterWord: marker.after_word,
+        inline: !!marker.inline,
+      }));
+      documentRecord.citationsStripped = citationsStripped;
+      return documentRecord;
+    }
+
+    // Saves a new PDF document with its (partitioned) sections, none of which
+    // has audio yet: nothing is generated until it's read. Returns its id.
+    async function createPdfDocument(name, extraction, options) {
+      const documentRecord = makePdfDocumentRecord(name, extraction, options);
+      const sections = partitionDocument(documentRecord).map((range) => makeMissingSection(undefined, documentRecord, range));
+      return saveDocumentWithSections(documentRecord, sections);
+    }
+
+
+    // Each word with its character range in the text, matched in order (the
+    // same matching the full document view uses); null if it isn't found.
+    function documentWordsFromTimings(text, timings) {
+      let cursor = 0;
+      return timings.map((timing) => {
+        const start = text.indexOf(timing.word, cursor);
+        if (start === -1) {
+          return { word: timing.word, start: null, end: null };
+        }
+        cursor = start + timing.word.length;
+        return { word: timing.word, start, end: cursor };
+      });
+    }
+
+    // --- Sections -------------------------------------------------------
+    // A document's text is partitioned into sections of about
+    // SECTION_TARGET_WORDS words, each ending (if it can) at a paragraph end,
+    // else a sentence end, else a clause end, whichever is nearest the
+    // target within [MIN, MAX] words. A sentence with none of those (a very
+    // long one) is cut at the target: the bounded fallback. The last section
+    // takes everything left once that fits in MAX, and a cut never leaves
+    // fewer than MIN words behind. The same text always gives the same
+    // sections, covering every word exactly once.
+    // (Until step 28 can play across sections, new documents still get one
+    // section covering all their words; see makeReadySection.)
+    const SECTION_TARGET_WORDS = 450;
+    const SECTION_MIN_WORDS = Math.round((SECTION_TARGET_WORDS * 2) / 3);
+    const SECTION_MAX_WORDS = Math.round((SECTION_TARGET_WORDS * 4) / 3);
+    // words ending in "." that don't end a sentence
+    const ABBREVIATIONS = new Set([
+      "mr.", "mrs.", "ms.", "dr.", "prof.", "st.", "jr.", "sr.", "vs.", "e.g.", "i.e.", "cf.", "al.",
+      "fig.", "figs.", "eq.", "eqs.", "no.", "vol.", "pp.", "p.", "ch.", "sec.", "u.s.", "a.m.", "p.m.",
+    ]);
+    const BOUNDARY_NONE = 0;
+    const BOUNDARY_CLAUSE = 1;
+    const BOUNDARY_SENTENCE = 2;
+    const BOUNDARY_PARAGRAPH = 3;
+
+    // How good a place the end of word i is to end a section.
+    function boundaryStrength(words, text, i) {
+      if (i === words.length - 1) {
+        return BOUNDARY_PARAGRAPH;
+      }
+      const here = words[i];
+      const next = words[i + 1];
+      if (here.end != null && next.start != null && /\n[^\S\n]*\n/.test(text.slice(here.end, next.start))) {
+        return BOUNDARY_PARAGRAPH;
+      }
+      const bare = here.word.replace(/["'”’)\]]+$/, "");
+      if (/[.!?…]$/.test(bare) && !ABBREVIATIONS.has(bare.toLowerCase()) && !/^[A-Z]\.$/.test(bare)) {
+        return BOUNDARY_SENTENCE;
+      }
+      if (/[,;:—–]$/.test(bare)) {
+        return BOUNDARY_CLAUSE;
+      }
+      return BOUNDARY_NONE;
+    }
+
+    // [{wordStart, wordEnd}] (end exclusive) covering all of the document's words.
+    function partitionDocument(documentRecord, target = SECTION_TARGET_WORDS) {
+      const { words, text } = documentRecord;
+      const minWords = Math.round((target * 2) / 3);
+      const maxWords = Math.round((target * 4) / 3);
+      const sections = [];
+      let start = 0;
+      while (start < words.length) {
+        const remaining = words.length - start;
+        if (remaining <= maxWords) {
+          sections.push({ wordStart: start, wordEnd: words.length });
+          break;
+        }
+        let best = null;
+        const lastEnd = Math.min(start + maxWords, words.length - minWords);
+        for (let end = start + minWords; end <= lastEnd; end++) {
+          const strength = boundaryStrength(words, text, end - 1);
+          const distance = Math.abs(end - (start + target));
+          if (!best || strength > best.strength || (strength === best.strength && distance < best.distance)) {
+            best = { end, strength, distance };
+          }
+        }
+        // no boundary at all (one very long sentence): cut at the target,
+        // but still never leaving fewer than minWords behind
+        const end = best.strength > BOUNDARY_NONE ? best.end : Math.min(start + target, lastEnd);
+        sections.push({ wordStart: start, wordEnd: end });
+        start = end;
+      }
+      return sections;
+    }
+
+    // Problems with a set of sections for a document of wordCount words:
+    // gaps, overlaps, empty sections, or not covering every word. [] if none.
+    function validateSections(sections, wordCount) {
+      const problems = [];
+      const sorted = [...sections].sort((a, b) => a.wordStart - b.wordStart);
+      let expected = 0;
+      sorted.forEach((section) => {
+        if (section.wordEnd <= section.wordStart) {
+          problems.push(`empty section [${section.wordStart}, ${section.wordEnd})`);
+        }
+        if (section.wordStart > expected) {
+          problems.push(`gap: words ${expected}-${section.wordStart - 1} are in no section`);
+        } else if (section.wordStart < expected) {
+          problems.push(`overlap: words ${section.wordStart}-${expected - 1} are in two sections`);
+        }
+        expected = Math.max(expected, section.wordEnd);
+      });
+      if (expected !== wordCount) {
+        problems.push(`sections end at word ${expected}, the document has ${wordCount}`);
+      }
+      return problems;
+    }
+
+    // The section containing a global word (sections sorted, non-overlapping):
+    // a jump uses it rather than creating a new, overlapping range.
+    function sectionForWord(sections, wordIndex) {
+      let low = 0;
+      let high = sections.length - 1;
+      while (low <= high) {
+        const middle = (low + high) >> 1;
+        const section = sections[middle];
+        if (wordIndex < section.wordStart) {
+          high = middle - 1;
+        } else if (wordIndex >= section.wordEnd) {
+          low = middle + 1;
+        } else {
+          return section;
+        }
+      }
+      return null;
+    }
+
+    // Equation markers are anchored to a global word boundary, afterWord:
+    // -1 = before the first word, words.length - 1 = after the last. They
+    // don't depend on sections; a marker plays with the section holding the
+    // word it follows (the first section for -1).
+    function equationMarkerSection(sections, marker) {
+      return sectionForWord(sections, Math.max(marker.afterWord, 0));
+    }
+
+    function validateEquationMarkers(documentRecord) {
+      return documentRecord.equationMarkers
+        .filter((marker) => !Number.isInteger(marker.afterWord) || marker.afterWord < -1 || marker.afterWord >= documentRecord.words.length)
+        .map((marker) => `equation marker after word ${marker.afterWord} is outside the document`);
+    }
+
+
+    // A section with its audio and the timings aligned to the document's
+    // words. Its range comes from the document's words, never from the
+    // timings, so regenerating audio can't move a section's boundaries.
+    // Until step 28, every document has one section covering all its words.
+    function makeReadySection(documentId, documentRecord, audioBlob, timings, durationMs,
+                              range = { wordStart: 0, wordEnd: documentRecord.words.length }) {
+      const { timings: aligned, alignment } = alignTimings(documentRecord.words, timings, range.wordStart, range.wordEnd);
+      return {
+        documentId,
+        textRevision: documentRecord.textRevision,
+        wordStart: range.wordStart,
+        wordEnd: range.wordEnd,
+        status: SECTION_READY,
+        audioBlob,
+        durationMs,
+        timings: aligned,
+        alignment,
+      };
+    }
+
+    // Global word index for a position in the player's `words` (the current
+    // section's timings): an unmatched timing counts as the matched word
+    // before it. Without a library section the two are the same.
+    function globalWordIndex(localIndex) {
+      if (!currentSection) {
+        return localIndex;
+      }
+      if (localIndex < 0) {
+        // before a section's first word: "not started" only at the start of
+        // the document, otherwise that section's first word (so a reader
+        // paused there resumes there, not from the beginning)
+        return currentSection.wordStart > 0 ? currentSection.wordStart : -1;
+      }
+      for (let i = localIndex; i >= 0; i--) {
+        if (words[i] && words[i].wordIndex != null) {
+          return words[i].wordIndex;
+        }
+      }
+      return currentSection.wordStart;
+    }
+
+    // Position in `timings` to resume a global word from: the last timing at
+    // or before that word.
+    function localIndexForGlobalWord(timings, globalIndex) {
+      let found = 0;
+      timings.forEach((timing, i) => {
+        if (timing.wordIndex != null && timing.wordIndex <= globalIndex) {
+          found = i;
+        }
+      });
+      return found;
+    }
+
+    function makeMissingSection(documentId, documentRecord, range = { wordStart: 0, wordEnd: documentRecord.words.length }) {
+      return {
+        documentId,
+        textRevision: documentRecord.textRevision,
+        wordStart: range.wordStart,
+        wordEnd: range.wordEnd,
+        status: SECTION_MISSING,
+        audioBlob: null,
+        durationMs: null,
+        timings: [],
+        alignment: null,
+      };
+    }
+
+    function requestResult(request) {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function transactionDone(transaction) {
+      return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () => reject(transaction.error || new DOMException("Transaction aborted", "AbortError"));
+        transaction.onerror = () => {}; // reported through onabort
+      });
+    }
+
+    async function getLibraryDocument(id) {
+      const db = await openLibraryDB();
+      return requestResult(db.transaction(DOCUMENTS_STORE, "readonly").objectStore(DOCUMENTS_STORE).get(id));
+    }
+
+    async function getAllLibraryDocuments() {
+      const db = await openLibraryDB();
+      return requestResult(db.transaction(DOCUMENTS_STORE, "readonly").objectStore(DOCUMENTS_STORE).getAll());
+    }
+
+    async function getAllSections() {
+      const db = await openLibraryDB();
+      return requestResult(db.transaction(SECTIONS_STORE, "readonly").objectStore(SECTIONS_STORE).getAll());
+    }
+
+    // The document's sections for its current text revision, in word order.
+    async function getDocumentSections(documentRecord) {
+      const db = await openLibraryDB();
+      const sections = await requestResult(
+        db.transaction(SECTIONS_STORE, "readonly").objectStore(SECTIONS_STORE).index("documentId").getAll(documentRecord.id)
+      );
+      return sections
+        .filter((section) => section.textRevision === documentRecord.textRevision)
+        .sort((a, b) => a.wordStart - b.wordStart);
+    }
+
+    function libraryError(name, message) {
+      const error = new Error(message);
+      error.name = name;
+      return error;
+    }
+
+    // Changes some fields of a stored document (name, position, last opened)
+    // in one transaction, reading the current record inside it, so a caller
+    // holding an older copy can't undo other changes (e.g. a new text
+    // revision). With expectedRevision, nothing changes unless the document is
+    // still at that revision (a position from old audio must not land in new
+    // text). Returns false if the document is gone or at another revision.
+    async function updateDocumentFields(id, fields, expectedRevision = null) {
+      const db = await openLibraryDB();
+      const transaction = db.transaction(DOCUMENTS_STORE, "readwrite");
+      const done = transactionDone(transaction);
+      const store = transaction.objectStore(DOCUMENTS_STORE);
+      let updated = false;
+      store.get(id).onsuccess = (event) => {
+        const stored = event.target.result;
+        if (!stored || (expectedRevision !== null && stored.textRevision !== expectedRevision)) {
+          return;
+        }
+        store.put({ ...stored, ...fields });
+        updated = true;
+      };
+      await done;
+      return updated;
+    }
+
+    // Saves a document and sections of it in one transaction: all of it is
+    // written or none of it. A new document (no id) gets one and its sections
+    // point at it. Returns the document id; saved sections get their ids.
+    async function saveDocumentWithSections(documentRecord, sections) {
+      const db = await openLibraryDB();
+      const transaction = db.transaction([DOCUMENTS_STORE, SECTIONS_STORE], "readwrite");
+      const done = transactionDone(transaction);
+      const sectionStore = transaction.objectStore(SECTIONS_STORE);
+      // a put can throw (e.g. a value that can't be stored): abort the whole
+      // transaction and report that error rather than a generic abort
+      let failure = null;
+      const attempt = (write) => {
+        try {
+          write();
+        } catch (error) {
+          failure = failure || error;
+          transaction.abort();
+        }
+      };
+      const saveSections = (documentId) => {
+        sections.forEach((section) => {
+          section.documentId = documentId;
+          attempt(() => {
+            sectionStore.put(section).onsuccess = (event) => {
+              section.id = event.target.result;
+            };
+          });
+        });
+      };
+      const saveDocument = () => {
+        attempt(() => {
+          const documentRequest = transaction.objectStore(DOCUMENTS_STORE).put(documentRecord);
+          documentRequest.onsuccess = () => {
+            documentRecord.id = documentRequest.result;
+            saveSections(documentRecord.id);
+          };
+        });
+      };
+      if (documentRecord.id === undefined) {
+        saveDocument();
+      } else {
+        // An existing document must still exist and still be at this text
+        // revision: otherwise these sections describe text it no longer has
+        // (stale timings) or it was deleted (and mustn't come back).
+        transaction.objectStore(DOCUMENTS_STORE).get(documentRecord.id).onsuccess = (event) => {
+          const stored = event.target.result;
+          if (!stored) {
+            failure = libraryError("DocumentDeletedError", "The document was deleted.");
+            transaction.abort();
+          } else if (stored.textRevision !== documentRecord.textRevision) {
+            failure = libraryError("StaleRevisionError", "The document's text changed; these sections are out of date.");
+            transaction.abort();
+          } else {
+            saveDocument();
+          }
+        };
+      }
+      try {
+        await done;
+      } catch (error) {
+        throw failure || error;
+      }
+      return documentRecord.id;
+    }
+
+    // Deletes a document and all of its sections, in one transaction.
+    async function deleteLibraryDocument(id) {
+      const db = await openLibraryDB();
+      const transaction = db.transaction([DOCUMENTS_STORE, SECTIONS_STORE], "readwrite");
+      const done = transactionDone(transaction);
+      transaction.objectStore(DOCUMENTS_STORE).delete(id);
+      transaction.objectStore(SECTIONS_STORE).index("documentId").openKeyCursor(IDBKeyRange.only(id)).onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+          transaction.objectStore(SECTIONS_STORE).delete(cursor.primaryKey);
+          cursor.continue();
+        }
+      };
+      await done;
+    }
+
+    // Saves one section of an existing document, in one transaction, without
+    // rewriting the document record (so a position saved meanwhile is kept).
+    // Refused if the document was deleted (DocumentDeletedError; it's never
+    // re-created) or is no longer at the section's text revision
+    // (StaleRevisionError). Returns the section's id.
+    async function saveSection(section) {
+      const db = await openLibraryDB();
+      const transaction = db.transaction([DOCUMENTS_STORE, SECTIONS_STORE], "readwrite");
+      const done = transactionDone(transaction);
+      let failure = null;
+      transaction.objectStore(DOCUMENTS_STORE).get(section.documentId).onsuccess = (event) => {
+        const stored = event.target.result;
+        if (!stored) {
+          failure = libraryError("DocumentDeletedError", "The document was deleted.");
+          transaction.abort();
+        } else if (stored.textRevision !== section.textRevision) {
+          failure = libraryError("StaleRevisionError", "The document's text changed; this section is out of date.");
+          transaction.abort();
+        } else {
+          try {
+            transaction.objectStore(SECTIONS_STORE).put(section).onsuccess = (putEvent) => {
+              section.id = putEvent.target.result;
+            };
+          } catch (error) {
+            failure = error;
+            transaction.abort();
+          }
+        }
+      };
+      try {
+        await done;
+      } catch (error) {
+        throw failure || error;
+      }
+      return section.id;
+    }
+
+    async function updateLibraryDocumentPosition(id, positionWordIndex, textRevision) {
+      return updateDocumentFields(id, { positionWordIndex }, textRevision);
+    }
+
+    // Replaces a document's reading text (e.g. when its citation setting
+    // changes), in one transaction: a new text revision with new words, every
+    // section of older revisions deleted (their audio and timings describe
+    // text the document no longer has), new sections to generate (the new
+    // text partitioned), the position reset, and an explanation shown once
+    // the document is next in
+    // view (revisionNotice). `changes` are other fields to set with it (e.g.
+    // the citation setting). The new words are the text's own words, except
+    // for a PDF: its words carry their pages and its equation markers are
+    // anchored to them, so `changes` must bring both from the new extraction
+    // (`words` and `equationMarkers`, shaped as in makePdfDocumentRecord).
+    // Returns the updated document.
+    async function reviseDocumentText(id, newText, explanation, changes = {}) {
+      const db = await openLibraryDB();
+      const transaction = db.transaction([DOCUMENTS_STORE, SECTIONS_STORE], "readwrite");
+      const done = transactionDone(transaction);
+      const documentStore = transaction.objectStore(DOCUMENTS_STORE);
+      const sectionStore = transaction.objectStore(SECTIONS_STORE);
+      let revised = null;
+      let pdfWithoutWords = false;
+      documentStore.get(id).onsuccess = (event) => {
+        const stored = event.target.result;
+        if (!stored) {
+          transaction.abort();
+          return;
+        }
+        if (stored.pages && !(changes.words && changes.equationMarkers)) {
+          pdfWithoutWords = true; // its pages and equations would be lost
+          transaction.abort();
+          return;
+        }
+        revised = {
+          ...stored,
+          ...changes,
+          text: newText,
+          textRevision: stored.textRevision + 1,
+          words: changes.words || textWords(newText),
+          positionWordIndex: -1,
+          revisionNotice: explanation,
+        };
+        documentStore.put(revised);
+        sectionStore.index("documentId").openKeyCursor(IDBKeyRange.only(id)).onsuccess = (cursorEvent) => {
+          const cursor = cursorEvent.target.result;
+          if (cursor) {
+            sectionStore.delete(cursor.primaryKey);
+            cursor.continue();
+          } else {
+            partitionDocument(revised).forEach((range) => sectionStore.add(makeMissingSection(id, revised, range)));
+          }
+        };
+      };
+      try {
+        await done;
+      } catch (error) {
+        if (pdfWithoutWords) {
+          throw libraryError("InvalidRevisionError", "A PDF's text can only be revised together with its new words and equation markers.");
+        }
+        throw revised ? error : libraryError("DocumentDeletedError", "The document was deleted.");
+      }
+      return revised;
+    }
+
+    // Current word index at the playhead, falling back to the most recently
+    // started word when the exact moment falls in a gap between words.
+    function getCurrentWordIndexForPosition() {
+      const currentMs = audioPlayer.currentTime * 1000;
+      const exactIndex = words.findIndex((w) => currentMs >= w.start_ms && currentMs < w.end_ms);
+      if (exactIndex !== -1) {
+        return exactIndex;
+      }
+      for (let i = words.length - 1; i >= 0; i--) {
+        if (currentMs >= words[i].start_ms) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    function saveCurrentPositionIfTracked() {
+      // not while a section is loading, or for a document other than the one
+      // in the player (the audio element may still hold the previous one)
+      if (currentDocumentId === null || sectionLoading || !player || player.documentId !== currentDocumentId || activeIndex < 0) {
+        return;
+      }
+      const localIndex = getCurrentWordIndexForPosition();
+      const globalIndex = globalWordIndex(localIndex);
+      updateLibraryDocumentPosition(currentDocumentId, globalIndex, currentSection ? currentSection.textRevision : null).then(() => {
+        // avoid clobbering an in-progress rename input with a background re-render
+        if (renamingEntryId === null) {
+          renderLibrary();
+        }
+      });
+    }
+
+    audioPlayer.addEventListener("play", () => {
+      if (positionSaveIntervalId === null) {
+        positionSaveIntervalId = setInterval(saveCurrentPositionIfTracked, 5000);
+      }
+    });
+
+    audioPlayer.addEventListener("pause", () => {
+      clearInterval(positionSaveIntervalId);
+      positionSaveIntervalId = null;
+      saveCurrentPositionIfTracked();
+    });
+
+    // Seeking while paused (Back/Forward, scrubbing) fires no pause event and
+    // the 5s interval isn't running, so save here or the new spot is lost.
+    audioPlayer.addEventListener("seeked", () => {
+      if (audioPlayer.paused) {
+        saveCurrentPositionIfTracked();
+      }
+    });
+
+    // Size of the document's saved audio (its current revision's sections).
+    // Size of the document's saved audio (its current revision's sections)
+    // and, for a document in several parts, how many of them are saved (only
+    // those play offline).
+    function formatAudioSize(documentRecord, sections) {
+      const current = sections.filter((section) => section.textRevision === documentRecord.textRevision);
+      const saved = current.filter((section) => section.status === SECTION_READY && section.audioBlob);
+      if (saved.length === 0) {
+        return "audio not saved";
+      }
+      const bytes = saved.reduce((total, section) => total + section.audioBlob.size, 0);
+      const size = `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+      if (current.length <= 1) {
+        return size;
+      }
+      return saved.length === current.length
+        ? `${size} · all ${current.length} parts saved`
+        : `${size} · ${saved.length} of ${current.length} parts saved`;
+    }
+
+    function formatProgress(documentRecord) {
+      if (documentRecord.positionWordIndex < 0 || documentRecord.words.length === 0) {
+        return "Not started";
+      }
+      const percent = Math.round(((documentRecord.positionWordIndex + 1) / documentRecord.words.length) * 100);
+      return `${percent}% through`;
+    }
+
+    const libraryListEl = document.getElementById("library-list");
+    let renamingEntryId = null;
+
+    async function renderLibrary() {
+      const [allDocs, allSections] = await Promise.all([getAllLibraryDocuments(), getAllSections()]);
+      allDocs.sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0));
+      const sectionsByDocument = new Map();
+      allSections.forEach((section) => {
+        if (!sectionsByDocument.has(section.documentId)) {
+          sectionsByDocument.set(section.documentId, []);
+        }
+        sectionsByDocument.get(section.documentId).push(section);
+      });
+
+      libraryListEl.innerHTML = "";
+      allDocs.forEach((record) => {
+        const row = document.createElement("div");
+        row.className = "library-entry";
+        let renameInput = null;
+
+        if (renamingEntryId === record.id) {
+          const input = document.createElement("input");
+          input.type = "text";
+          input.value = record.name;
+          renameInput = input;
+
+          const saveBtn = document.createElement("button");
+          saveBtn.textContent = "Save";
+          saveBtn.addEventListener("click", async () => {
+            const newName = input.value.trim();
+            if (newName) {
+              await updateDocumentFields(record.id, { name: newName });
+            }
+            renamingEntryId = null;
+            renderLibrary();
+          });
+
+          const cancelBtn = document.createElement("button");
+          cancelBtn.textContent = "Cancel";
+          cancelBtn.addEventListener("click", () => {
+            renamingEntryId = null;
+            renderLibrary();
+          });
+
+          row.appendChild(input);
+          row.appendChild(saveBtn);
+          row.appendChild(cancelBtn);
+        } else {
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = record.name;
+          nameSpan.className = "library-entry-name";
+          nameSpan.addEventListener("click", () => reopenLibraryEntry(record.id));
+
+          const progressSpan = document.createElement("span");
+          progressSpan.textContent = formatProgress(record);
+
+          const sizeSpan = document.createElement("span");
+          sizeSpan.className = "library-entry-size";
+          sizeSpan.textContent = formatAudioSize(record, sectionsByDocument.get(record.id) || []);
+
+          const renameBtn = document.createElement("button");
+          renameBtn.textContent = "Rename";
+          renameBtn.addEventListener("click", () => {
+            renamingEntryId = record.id;
+            renderLibrary();
+          });
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", async () => {
+            await deleteLibraryDocument(record.id);
+            if (currentDocumentId === record.id) {
+              currentDocumentId = null;
+              if (player && player.documentId === record.id) {
+                // what's loaded plays on, but nothing more is prepared or saved
+                player.documentId = null;
+                player.deleted = true;
+                if (waitingFor) {
+                  waitingFor = null;
+                  hidePreparingNotice();
+                }
+              }
+            }
+            renderLibrary();
+          });
+
+          row.appendChild(nameSpan);
+          row.appendChild(progressSpan);
+          row.appendChild(sizeSpan);
+          row.appendChild(renameBtn);
+          row.appendChild(deleteBtn);
+        }
+
+        libraryListEl.appendChild(row);
+
+        // can only focus once it's in the document; cursor goes after the name
+        if (renameInput) {
+          renameInput.focus();
+          renameInput.setSelectionRange(renameInput.value.length, renameInput.value.length);
+        }
+      });
+    }
+
+    window.addEventListener("beforeunload", (event) => {
+      if (hasStarted) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    });
+
+    async function runSynthesis(text) {
+      const response = await fetch(BACKEND_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status ${response.status}`);
+      }
+
+      return response.json();
+    }
+
+    // --- The player: one active document, played section by section --------
+    // player: {documentId (null for an unsaved document), textRevision, text,
+    //   words (the document's words), equationMarkers (global anchors, for the
+    //   equation display in step 32), sections (in word order; a ready one has
+    //   its audioBlob and timings in memory)}.
+    // Only the active section is in the audio element. `words` (used by the
+    // captions and position saving) is its timings, and `currentSection` is
+    // it, so a timing's wordIndex gives the document-wide word.
+    let player = null;
+    let activeIndex = -1;
+    // Bumped whenever what should be loaded or playing changes (a document
+    // switch, a section load, a seek to another section): async work that
+    // finishes with an older token does nothing.
+    let loadToken = 0;
+    // The user's play/pause intent, kept across section loads: a pause pressed
+    // while a section is loading wins over the load finishing.
+    let wantsToPlay = false;
+    let sectionLoading = false;
+    // Object URLs by section index: only the active section's and the next
+    // (preloaded) one's exist at a time.
+    const sectionUrls = new Map();
+    // A seek the player makes itself (loading a section at a word), which
+    // mustn't cancel a playing selection the way a user's seek does.
+    let ownSeekTarget = null;
+
+    function isReady(index) {
+      const section = player && player.sections[index];
+      return !!section && section.status === SECTION_READY && !!section.audioBlob && section.timings.length > 0;
+    }
+
+    function currentSpeed() {
+      return parseFloat(document.querySelector(".speed-button.active").dataset.speed);
+    }
+
+    function sectionDurationMs(index) {
+      const section = player.sections[index];
+      if (index === activeIndex && Number.isFinite(audioPlayer.duration)) {
+        return audioPlayer.duration * 1000;
+      }
+      if (section.durationMs != null) {
+        return section.durationMs;
+      }
+      return section.timings.length ? section.timings[section.timings.length - 1].end_ms : 0;
+    }
+
+    // The text a section's audio is generated from.
+    function sectionText(documentRecord, section) {
+      const first = documentRecord.words[section.wordStart];
+      const last = documentRecord.words[section.wordEnd - 1];
+      if (first && last && first.start != null && last.end != null) {
+        return documentRecord.text.slice(first.start, last.end);
+      }
+      if (section.wordStart === 0 && section.wordEnd === documentRecord.words.length) {
+        return documentRecord.text; // a migrated one-section document
+      }
+      return documentRecord.words.slice(section.wordStart, section.wordEnd).map((w) => w.word).join(" ");
+    }
+
+    function sectionUrl(index) {
+      if (!sectionUrls.has(index)) {
+        sectionUrls.set(index, URL.createObjectURL(player.sections[index].audioBlob));
+      }
+      return sectionUrls.get(index);
+    }
+
+    function releaseSectionUrls(keep = []) {
+      sectionUrls.forEach((url, index) => {
+        if (!keep.includes(index)) {
+          URL.revokeObjectURL(url);
+          sectionUrls.delete(index);
+        }
+      });
+    }
+
+    // Reads the next section's audio into memory and makes its URL now, so
+    // moving on to it doesn't wait on the library.
+    async function preloadNextSection() {
+      const next = activeIndex + 1;
+      const token = loadToken;
+      if (!isReady(next)) {
+        return;
+      }
+      const section = player.sections[next];
+      if (!section.preloaded) {
+        const bytes = await section.audioBlob.arrayBuffer();
+        if (token !== loadToken) {
+          return;
+        }
+        section.audioBlob = new Blob([bytes], { type: section.audioBlob.type || "audio/mpeg" });
+        section.preloaded = true;
+      }
+      sectionUrl(next);
+    }
+
+    // Loads section `index` into the audio element at seekMs, then plays if
+    // the user still wants to. Returns false if something else happened
+    // meanwhile (a newer load, a seek, a document switch) or the audio can't
+    // be loaded (the audio element's error handler reports that).
+    async function loadSection(index, seekMs = 0) {
+      cancelEquationHold();
+      const token = ++loadToken;
+      sectionLoading = true;
+      const section = player.sections[index];
+      activeIndex = index;
+      currentSection = section;
+      words = section.timings;
+      const url = sectionUrl(index);
+      const loaded = new Promise((resolve) => {
+        const onLoaded = () => {
+          audioPlayer.removeEventListener("error", onError);
+          resolve(true);
+        };
+        const onError = () => {
+          audioPlayer.removeEventListener("loadedmetadata", onLoaded);
+          resolve(false);
+        };
+        audioPlayer.addEventListener("loadedmetadata", onLoaded, { once: true });
+        audioPlayer.addEventListener("error", onError, { once: true });
+      });
+      audioPlayer.src = url;
+      audioPlayer.playbackRate = currentSpeed();
+      const ok = await loaded;
+      if (token !== loadToken) {
+        return false;
+      }
+      sectionLoading = false;
+      if (!ok) {
+        return false;
+      }
+      if (seekMs > 0) {
+        ownSeekTarget = seekMs / 1000;
+        audioPlayer.currentTime = ownSeekTarget;
+      }
+      // the element's rate resets with a new source on some browsers
+      audioPlayer.playbackRate = currentSpeed();
+      updateWordDisplay();
+      if (wantsToPlay) {
+        playAudio();
+      }
+      releaseSectionUrls([index, index + 1]);
+      preloadNextSection();
+      schedulePreparation();
+      return true;
+    }
+
+    // Opens a document in the player (replacing any other) at a global word.
+    function openPlayer(documentRecord, sections) {
+      cancelEquationHold();
+      equationArmFrom = Infinity; // armed when playback starts somewhere
+      firedEquations.clear();
+      loadToken++;
+      releaseSectionUrls();
+      player = {
+        documentId: documentRecord.id ?? null,
+        textRevision: documentRecord.textRevision,
+        text: documentRecord.text,
+        words: documentRecord.words,
+        equationMarkers: documentRecord.equationMarkers || [],
+        sections,
+        // a PDF's page count and, per page, its words' global range (null for
+        // a page with no text); null for text documents
+        pageCount: documentRecord.pages ? documentRecord.pages.count : null,
+        pageRanges: null,
+        // the saved position when it was opened: where Play starts if no
+        // section has been loaded yet (a document opened just for browsing)
+        startWord: documentRecord.positionWordIndex ?? -1,
+      };
+      if (player.pageCount) {
+        player.pageRanges = Array.from({ length: player.pageCount }, () => null);
+        player.words.forEach((w, index) => {
+          const range = player.pageRanges[w.page - 1];
+          if (range) {
+            range.last = index;
+          } else if (w.page >= 1 && w.page <= player.pageCount) {
+            player.pageRanges[w.page - 1] = { first: index, last: index };
+          }
+        });
+        const position = documentRecord.positionWordIndex;
+        viewedPage = position >= 0 && player.words[position] ? player.words[position].page : 1;
+      }
+      // the last document's search belongs to it (its results jump to its pages)
+      searchHit = null;
+      searchInput.value = "";
+      searchResults.textContent = "";
+      activeIndex = -1;
+      words = [];
+      currentSection = null;
+      waitingFor = null;
+      hidePreparingNotice();
+      lookaheadEnabled = false;
+      synthesizedText = player.text;
+      findingStartPoint = false;
+      clearSelection();
+      updateFullDocumentView();
+      showCaption("");
+    }
+
+    // Where a global word is spoken: {index (section), timing (local index)};
+    // for a word no timing covers (e.g. "—"), the timing before it.
+    function locateWord(globalIndex) {
+      const section = sectionForWord(player.sections, globalIndex);
+      if (!section) {
+        return null;
+      }
+      const index = player.sections.indexOf(section);
+      if (!isReady(index)) {
+        return { index, timing: null };
+      }
+      let timing = 0;
+      section.timings.forEach((t, i) => {
+        if (t.wordIndex != null && t.wordIndex <= globalIndex) {
+          timing = i;
+        }
+      });
+      const exact = section.timings.findIndex((t) => t.wordIndex != null && t.wordIndex <= globalIndex && globalIndex <= t.lastWordIndex);
+      return { index, timing: exact >= 0 ? exact : timing };
+    }
+
+    // The ms (in its section's audio) at which a global word has been spoken.
+    function wordEndMs(globalIndex) {
+      const place = locateWord(globalIndex);
+      if (!place || place.timing === null) {
+        return null;
+      }
+      const timings = player.sections[place.index].timings;
+      let end = timings[place.timing].end_ms;
+      timings.forEach((t) => {
+        if (t.wordIndex != null && t.wordIndex <= globalIndex && t.lastWordIndex >= globalIndex) {
+          end = Math.max(end, t.end_ms);
+        }
+      });
+      return { index: place.index, ms: end };
+    }
+
+    // play() rejects when interrupted by pause (harmless) or when the media
+    // can't be played; real media failures are reported by the "error" handler.
+    function playAudio() {
+      audioPlayer.play().catch((error) => {
+        if (error.name !== "AbortError") {
+          console.warn("Playback did not start:", error);
+        }
+      });
+    }
+
+    let lastAction = null;
+
+    const errorText = document.getElementById("error-text");
+    const SYNTHESIS_ERROR_TEXT = "Something went wrong generating audio, try again";
+    let retryHandler = null;
+
+    function showLoadError(message, onRetry) {
+      errorText.textContent = message;
+      retryHandler = onRetry;
+      loadingIndicator.style.display = "none";
+      errorMessage.style.display = "block";
+    }
+
+    function showLoading(message = "Generating audio…") {
+      loadingIndicator.textContent = message;
+      loadingIndicator.style.display = "block";
+    }
+
+    function retryLastAction() {
+      if (!lastAction) {
+        return;
+      }
+      if (lastAction.type === "reopen") {
+        reopenLibraryEntry(lastAction.id, { forceResynthesize: lastAction.forceResynthesize });
+      } else {
+        synthesize(lastAction.documentName, lastAction.text, lastAction.sourceType);
+      }
+    }
+
+    // Audio is played from in-memory Blobs (the same Blobs that get saved in
+    // the library), never streamed from the server URL.
+    async function fetchAudioBlob(audioUrl) {
+      const response = await fetch(audioUrl);
+      if (!response.ok) {
+        throw new Error(`Audio download failed with status ${response.status}`);
+      }
+      return response.blob();
+    }
+
+    // Generates one section's audio and timings and, for a saved document,
+    // saves the section (revision-checked, see saveSection). If storing the
+    // audio fails the section is saved as missing and a warning shown, but the
+    // ready section is still returned so it plays this session. Returns
+    // {section} or {outdated: error name} if the document was deleted or its
+    // text changed meanwhile (the audio then matches nothing).
+    async function prepareSection(documentRecord, section) {
+      const data = await runSynthesis(sectionText(documentRecord, section));
+      const audioBlob = await fetchAudioBlob(data.audio_url);
+      const ready = makeReadySection(documentRecord.id, documentRecord, audioBlob, data.words,
+        await measureAudioDuration(audioBlob), section);
+      if (section.id !== undefined) {
+        ready.id = section.id;
+      }
+      if (documentRecord.id === undefined || documentRecord.id === null) {
+        return { section: ready };
+      }
+      try {
+        await saveSection(ready);
+        requestPersistentStorage();
+        return { section: ready };
+      } catch (error) {
+        if (error.name === "StaleRevisionError" || error.name === "DocumentDeletedError") {
+          return { outdated: error.name };
+        }
+        console.warn("Saving audio to the library failed:", error);
+      }
+      const withoutAudio = makeMissingSection(documentRecord.id, documentRecord, section);
+      if (ready.id !== undefined) {
+        withoutAudio.id = ready.id;
+      }
+      try {
+        await saveSection(withoutAudio);
+        showStorageWarning(AUDIO_NOT_SAVED_MESSAGE);
+      } catch (error) {
+        console.warn("Saving to the library failed:", error);
+        showStorageWarning("This document is playing, but part of its audio couldn't be saved to the library.");
+      }
+      return { section: ready };
+    }
+
+    const storageWarning = document.getElementById("storage-warning");
+    const storageWarningText = document.getElementById("storage-warning-text");
+
+    function showStorageWarning(message) {
+      storageWarningText.textContent = message;
+      storageWarning.style.display = "block";
+    }
+
+    document.getElementById("storage-warning-dismiss").addEventListener("click", () => {
+      storageWarning.style.display = "none";
+    });
+
+    // Explains inline why a document's position was reset and its audio
+    // regenerated after its text changed (a new text revision).
+    const revisionNotice = document.getElementById("revision-notice");
+    const revisionNoticeText = document.getElementById("revision-notice-text");
+
+    function showRevisionNotice(message) {
+      revisionNoticeText.textContent = message || "";
+      revisionNotice.style.display = message ? "block" : "none";
+    }
+
+    // Dismissing it removes it from the document for good.
+    document.getElementById("revision-notice-dismiss").addEventListener("click", () => {
+      showRevisionNotice(null);
+      if (currentDocumentId !== null) {
+        updateDocumentFields(currentDocumentId, { revisionNotice: null }).catch((error) =>
+          console.warn("Clearing the notice failed:", error)
+        );
+      }
+    });
+
+    // Changes a document's reading text (e.g. its citation setting) through
+    // reviseDocumentText. If it's the open document, its old audio and
+    // timings stop being used at once: playback stops and the new text is
+    // shown with the explanation; opening it again generates new audio.
+    async function changeDocumentText(id, newText, explanation, changes = {}) {
+      const revised = await reviseDocumentText(id, newText, explanation, changes);
+      if (currentDocumentId === id) {
+        cancelEquationHold();
+        audioPlayer.pause();
+        loadToken++;
+        player = null;
+        activeIndex = -1;
+        waitingFor = null;
+        hidePreparingNotice();
+        releaseSectionUrls();
+        words = [];
+        synthesizedText = null;
+        currentSection = null;
+        showCaption("");
+        clearSelection();
+        document.getElementById("text-input").value = revised.text;
+        updateFullDocumentView();
+        showRevisionNotice(explanation);
+      }
+      await renderLibrary();
+      return revised;
+    }
+
+    // Asked the first time audio is saved, so a browser that prompts (Firefox)
+    // does it when it's relevant rather than on page load.
+    let persistentStorageRequested = false;
+    function requestPersistentStorage() {
+      if (persistentStorageRequested || !navigator.storage || !navigator.storage.persist) {
+        return;
+      }
+      persistentStorageRequested = true;
+      navigator.storage
+        .persisted()
+        .then((alreadyPersisted) => alreadyPersisted || navigator.storage.persist())
+        .catch((error) => console.warn("Persistent storage request failed:", error));
+    }
+
+    const AUDIO_NOT_SAVED_MESSAGE =
+      "This document is playing, but its audio couldn't be saved to the library (storage may be full). " +
+      "It will be generated again the next time you open it.";
+
+    // Saves a new document with its sections carrying newly generated audio,
+    // in one transaction (so audio and timings are never saved apart). If
+    // storing the audio fails (e.g. storage is full), the document is saved
+    // with its sections marked missing and a warning is shown; the sections
+    // in memory keep their audio, so the document still plays this session.
+    // Any failure here is reported but never stops it playing.
+    // Returns {id}: the document id, null if nothing could be saved.
+    async function saveDocumentWithNewAudio(documentRecord, sections) {
+      const forgetIds = () => {
+        // a failed transaction may have assigned ids before rolling back
+        delete documentRecord.id;
+        sections.forEach((section) => {
+          delete section.id;
+          section.documentId = undefined;
+        });
+      };
+      try {
+        const id = await saveDocumentWithSections(documentRecord, sections);
+        requestPersistentStorage();
+        return { id };
+      } catch (error) {
+        console.warn("Saving audio to the library failed:", error);
+        forgetIds();
+      }
+      const withoutAudio = sections.map((section) => makeMissingSection(undefined, documentRecord, section));
+      try {
+        const id = await saveDocumentWithSections(documentRecord, withoutAudio);
+        sections.forEach((section, i) => {
+          section.id = withoutAudio[i].id;
+          section.documentId = id;
+        });
+        showStorageWarning(AUDIO_NOT_SAVED_MESSAGE);
+        return { id };
+      } catch (error) {
+        console.warn("Saving to the library failed:", error);
+        forgetIds();
+        showStorageWarning("This document is playing, but it couldn't be saved to the library.");
+        return { id: null };
+      }
+    }
+
+    // The audio's length in ms, read from the Blob's metadata (null if the
+    // browser can't tell).
+    function measureAudioDuration(blob) {
+      return new Promise((resolve) => {
+        const probe = new Audio();
+        const url = URL.createObjectURL(blob);
+        let settled = false;
+        const finish = (durationMs) => {
+          if (settled) return;
+          settled = true;
+          URL.revokeObjectURL(url);
+          probe.removeAttribute("src");
+          resolve(durationMs);
+        };
+        probe.preload = "metadata";
+        probe.addEventListener("loadedmetadata", () => {
+          finish(Number.isFinite(probe.duration) ? Math.round(probe.duration * 1000) : null);
+        });
+        probe.addEventListener("error", () => finish(null));
+        setTimeout(() => finish(null), 5000);
+        probe.src = url;
+      });
+    }
+
+
+    async function synthesize(documentName, text = document.getElementById("text-input").value, sourceType = currentSourceType) {
+      hasStarted = true;
+      lastAction = { type: "new", documentName, text, sourceType };
+      errorMessage.style.display = "none";
+      storageWarning.style.display = "none";
+      showRevisionNotice(null);
+      showLoading();
+      cancelEquationHold();
+      const token = ++loadToken;
+      wantsToPlay = true;
+      firstAudioTimer = { kind: "new document", startedAt: performance.now() };
+
+      try {
+        const documentRecord = makeDocumentRecord({ name: documentName, sourceType, text, words: textWords(text) });
+        const sections = partitionDocument(documentRecord).map((range) => makeMissingSection(undefined, documentRecord, range));
+        // Only the first section is generated before playback starts; the
+        // queue prepares the next ones while it plays. The document is saved
+        // once that first audio exists, so a failure before then leaves no
+        // half-made document behind and Retry starts cleanly. A request still
+        // running for the previous document can't be cancelled: wait for it.
+        await waitForPreparationIdle();
+        if (token !== loadToken) {
+          return;
+        }
+        const generationStarted = performance.now();
+        sections[0] = (await prepareSection(documentRecord, sections[0])).section;
+        if (token !== loadToken) {
+          return; // another document was opened meanwhile
+        }
+        preparationStats.sections.push({
+          index: 0, words: sections[0].wordEnd - sections[0].wordStart,
+          generationMs: Math.round(performance.now() - generationStarted), audioMs: sections[0].durationMs, forOpenDocument: true,
+        });
+
+        if (documentName) {
+          const saved = await saveDocumentWithNewAudio(documentRecord, sections);
+          if (token !== loadToken) {
+            return;
+          }
+          currentDocumentId = saved.id;
+        } else {
+          currentDocumentId = null;
+        }
+        openPlayer(documentRecord, sections);
+        if (documentName) {
+          await renderLibrary();
+        }
+        armEquations(0);
+        await loadSection(0, 0);
+      } catch (error) {
+        if (token !== loadToken) {
+          return;
+        }
+        console.error("Synthesis failed:", error);
+        showLoadError(SYNTHESIS_ERROR_TEXT, retryLastAction);
+      }
+    }
+
+    // Opens a library document at its saved position (browseOnly: opens it
+    // without loading or generating any audio). If the section holding
+    // that position has no audio, the preparation queue generates it first and
+    // playback starts there once it's ready; later sections are prepared ahead
+    // while it plays. forceResynthesize regenerates that section even if it
+    // has audio.
+    async function reopenLibraryEntry(id, { forceResynthesize = false, browseOnly = false } = {}) {
+      hasStarted = true;
+      lastAction = { type: "reopen", id, forceResynthesize };
+      errorMessage.style.display = "none";
+      storageWarning.style.display = "none";
+      showRevisionNotice(null);
+      if (!browseOnly) {
+        showLoading();
+      }
+      cancelEquationHold();
+      const token = ++loadToken;
+      wantsToPlay = !browseOnly;
+      firstAudioTimer = { kind: "reopen", startedAt: performance.now() };
+
+      try {
+        const documentRecord = await getLibraryDocument(id);
+        document.getElementById("text-input").value = documentRecord.text;
+        updateFullDocumentView();
+        // why the position was reset, shown with the text even if its new
+        // audio can't be generated right now
+        showRevisionNotice(documentRecord.revisionNotice);
+
+        let sections = await getDocumentSections(documentRecord);
+        if (sections.length === 0) {
+          sections = partitionDocument(documentRecord).map((range) => makeMissingSection(id, documentRecord, range));
+        }
+        if (browseOnly) {
+          // just open it for reading its pages / text: no audio is loaded or
+          // generated until the reader chooses where to start
+          currentDocumentId = id;
+          audioPlayer.pause();
+          openPlayer(documentRecord, sections);
+          if (fullDocumentView.style.display !== "block") {
+            toggleFullDocumentButton.click();
+          } else {
+            updateFullDocumentView();
+          }
+          return;
+        }
+        const target = Math.max(0, documentRecord.positionWordIndex);
+        const index = Math.max(0, sections.indexOf(sectionForWord(sections, target)));
+        const section = sections[index];
+        const ready = section.status === SECTION_READY && !!section.audioBlob && section.timings.length > 0;
+        if (!ready || forceResynthesize) {
+          // its audio is prepared by the queue (first, before any lookahead),
+          // and playback starts there once it's ready
+          currentDocumentId = id;
+          openPlayer(documentRecord, sections);
+          await updateDocumentFields(id, { lastOpenedAt: Date.now() }, documentRecord.textRevision).catch((error) =>
+            console.warn("Updating the library entry failed:", error)
+          );
+          await renderLibrary();
+          requestSection(index, documentRecord.positionWordIndex >= 0 ? documentRecord.positionWordIndex : null,
+            { regenerate: forceResynthesize, message: "Generating audio…" });
+          return;
+        } else if (section.durationMs == null) {
+          // sections migrated from version 1 don't know their duration yet
+          section.durationMs = await measureAudioDuration(section.audioBlob);
+          if (section.durationMs != null) {
+            await saveSection(section).catch((error) => console.warn("Saving the duration failed:", error));
+          }
+        }
+        if (token !== loadToken) {
+          return;
+        }
+
+        currentDocumentId = id;
+        openPlayer(documentRecord, sections);
+        // only lastOpenedAt changes; a failure just leaves the old sort order
+        await updateDocumentFields(id, { lastOpenedAt: Date.now() }, documentRecord.textRevision).catch((error) =>
+          console.warn("Updating the library entry failed:", error)
+        );
+        await renderLibrary();
+
+        let seekMs = 0;
+        if (documentRecord.positionWordIndex >= 0) {
+          const place = locateWord(documentRecord.positionWordIndex);
+          if (place && place.timing !== null) {
+            seekMs = player.sections[place.index].timings[place.timing].start_ms;
+          }
+        }
+        armEquations(Math.max(0, documentRecord.positionWordIndex));
+        await loadSection(index, seekMs);
+      } catch (error) {
+        if (token !== loadToken) {
+          return;
+        }
+        console.error("Reopen failed:", error);
+        showLoadError(SYNTHESIS_ERROR_TEXT, retryLastAction);
+      }
+    }
+
+    // --- Preparing sections: a bounded queue, one request at a time --------
+    // What to prepare is worked out from the current state every time a
+    // request finishes or the state changes, in priority order: the section
+    // playback is waiting for (reopening, a jump, reaching audio that isn't
+    // ready), then PREPARE_AHEAD sections after the active one, the latter
+    // only once playback of the document has started (opening, browsing or
+    // selecting alone never generates anything). So after a seek, a document
+    // switch, a deletion or a text change, obsolete sections simply stop being
+    // wanted. The server can't cancel a synthesis request, so one already
+    // running is waited for before the next starts (that delays a jump by up
+    // to one section's generation time); its result is still saved if its
+    // document and text revision still exist (saveSection refuses otherwise,
+    // so nothing deleted is re-created) but is only played if it's still for
+    // the open document.
+    const PREPARE_AHEAD = 1;
+    let inFlight = null; // {player, index, promise, startedAt}
+    // What playback is waiting for: {index, word} (word: the global word to
+    // start from, null for the section start). Null when not waiting.
+    let waitingFor = null;
+    let lookaheadEnabled = false;
+    // Measurements: each generated section's time, and time to first audio.
+    const preparationStats = { sections: [], firstAudio: [], extraction: [] };
+
+    const preparingNotice = document.getElementById("preparing-notice");
+    const preparingNoticeText = document.getElementById("preparing-notice-text");
+    const preparingNoticePause = document.getElementById("preparing-notice-pause");
+
+    function wantedSections() {
+      if (!player || player.deleted) {
+        return [];
+      }
+      const wanted = [];
+      if (waitingFor !== null) {
+        // only the section playback waits for: the lookahead follows once it
+        // plays (from there, not from wherever playback was before a jump)
+        wanted.push(waitingFor.index);
+      } else if (lookaheadEnabled && activeIndex >= 0) {
+        for (let k = 1; k <= PREPARE_AHEAD; k++) {
+          wanted.push(activeIndex + k);
+        }
+      }
+      // a playing range never prepares anything past the section it ends in
+      let last = player.sections.length - 1;
+      if (selectionStopWord !== null) {
+        last = Math.min(last, player.sections.indexOf(sectionForWord(player.sections, selectionStopWord)));
+      }
+      return wanted.filter((index, position) =>
+        index <= last && wanted.indexOf(index) === position && !isReady(index) && !player.sections[index].failed
+      );
+    }
+
+    function schedulePreparation() {
+      if (inFlight) {
+        return; // one request at a time; it reschedules when it finishes
+      }
+      const index = wantedSections()[0];
+      if (index !== undefined) {
+        runPreparation(player, index);
+      }
+    }
+
+    // The open document as it's stored now, or null if it was deleted or its
+    // text changed (then there's nothing to prepare for it any more).
+    async function documentForPlayer(target) {
+      if (target.documentId === null) {
+        return { text: target.text, words: target.words, textRevision: target.textRevision };
+      }
+      const documentRecord = await getLibraryDocument(target.documentId);
+      return documentRecord && documentRecord.textRevision === target.textRevision ? documentRecord : null;
+    }
+
+    function runPreparation(target, index) {
+      const section = target.sections[index];
+      const startedAt = performance.now();
+      const promise = (async () => {
+        try {
+          const documentRecord = await documentForPlayer(target);
+          if (!documentRecord) {
+            return;
+          }
+          const result = await prepareSection(documentRecord, section);
+          const ms = Math.round(performance.now() - startedAt);
+          if (result.outdated || !result.section) {
+            return; // deleted or revised meanwhile: never used, never re-created
+          }
+          preparationStats.sections.push({
+            index, words: section.wordEnd - section.wordStart, generationMs: ms,
+            audioMs: result.section.durationMs, forOpenDocument: player === target,
+          });
+          if (target.sections[index] === section) {
+            target.sections[index] = result.section;
+          }
+          if (player === target) {
+            sectionPrepared(index);
+          }
+        } catch (error) {
+          console.warn("Preparing a section failed:", error);
+          if (target.sections[index] === section) {
+            section.failed = true;
+          }
+          if (player === target && waitingFor && waitingFor.index === index) {
+            showPreparationFailed(index, error);
+          }
+        }
+      })();
+      inFlight = { player: target, index, promise, startedAt };
+      promise.finally(() => {
+        inFlight = null;
+        schedulePreparation();
+      });
+    }
+
+    // Resolves once no request is running (a request can't be cancelled).
+    async function waitForPreparationIdle() {
+      while (inFlight) {
+        await inFlight.promise.catch(() => {});
+      }
+    }
+
+    function showPreparingNotice(message) {
+      loadingIndicator.style.display = "none";
+      preparingNoticeText.textContent = message;
+      preparingNoticePause.textContent = wantsToPlay ? "Pause" : "Play when ready";
+      preparingNotice.style.display = "block";
+      document.body.classList.add("waiting-for-section");
+    }
+
+    function hidePreparingNotice() {
+      preparingNotice.style.display = "none";
+      document.body.classList.remove("waiting-for-section");
+    }
+
+    // Playback wants section `index` (from `word`, or its start) but it has no
+    // audio yet: wait for it, preparing it before anything else. `message` is
+    // what the reader sees meanwhile.
+    function waitForSection(index, word = null, message = "Preparing the next section…") {
+      waitingFor = { index, word, message };
+      errorMessage.style.display = "none";
+      // if preparing it ahead failed, playback now needs it: try once more
+      // (failing again shows Retry for it)
+      delete player.sections[index].failed;
+      if (isReady(index)) {
+        sectionPrepared(index);
+        return;
+      }
+      showPreparingNotice(message);
+      schedulePreparation();
+    }
+
+    // A section finished preparing. If playback was waiting for it, carry on
+    // there, but only if the reader still wants to play.
+    function sectionPrepared(index) {
+      if (!waitingFor || waitingFor.index !== index) {
+        return;
+      }
+      if (!wantsToPlay) {
+        preparingNoticeText.textContent = "Ready. Press Play (or Space) to continue.";
+        preparingNoticePause.textContent = "Play";
+        return;
+      }
+      startWaitingSection();
+    }
+
+    function startWaitingSection() {
+      const { index, word } = waitingFor;
+      waitingFor = null;
+      hidePreparingNotice();
+      let seekMs = 0;
+      if (word !== null) {
+        const place = locateWord(word);
+        if (place && place.index === index && place.timing !== null) {
+          seekMs = player.sections[index].timings[place.timing].start_ms + 1;
+        }
+      }
+      loadSection(index, seekMs);
+    }
+
+    // A request that couldn't connect at all (fetch's TypeError: no internet,
+    // or the local audio server isn't running) is explained as such: that
+    // part simply isn't saved for listening offline.
+    function showPreparationFailed(index, error) {
+      hidePreparingNotice();
+      exitFocusMode();
+      const unreachable = navigator.onLine === false || (error && error.name === "TypeError");
+      showLoadError(
+        unreachable
+          ? "This part of the document isn't saved for offline listening, and the audio server couldn't be reached to generate it (are you offline?). Only saved parts play without a connection."
+          : "Something went wrong preparing this part of the document's audio.",
+        () => requestSection(index, waitingFor ? waitingFor.word : null, { continuing: !waitingFor || waitingFor.word === null })
+      );
+    }
+
+    // Asks for section `index` to play from `word` (global; null = its start):
+    // plays it now if it's ready, otherwise prepares it first (after the
+    // request already running, if any). `regenerate` replaces its audio (it
+    // was damaged). A section that failed gets another try.
+    // `continuing`: playback carrying on (not a seek), so equations already
+    // shown aren't shown again.
+    function requestSection(index, word = null, { regenerate = false, message, continuing = false } = {}) {
+      if (!player || index < 0 || index >= player.sections.length) {
+        return;
+      }
+      cancelEquationHold();
+      if (!continuing) {
+        armEquations(word ?? player.sections[index].wordStart);
+      }
+      const section = player.sections[index];
+      if (regenerate) {
+        const replacement = makeMissingSection(section.documentId, player, section);
+        if (section.id !== undefined) {
+          replacement.id = section.id;
+        }
+        player.sections[index] = replacement;
+        const oldUrl = sectionUrls.get(index);
+        if (oldUrl) {
+          URL.revokeObjectURL(oldUrl);
+          sectionUrls.delete(index);
+        }
+      }
+      delete player.sections[index].failed;
+      wantsToPlay = true;
+      errorMessage.style.display = "none";
+      if (isReady(index)) {
+        waitingFor = null;
+        hidePreparingNotice();
+        // +1ms so float rounding on currentTime can't land just before
+        // start_ms, which would make updateWordDisplay miss the word
+        const place = word === null ? null : locateWord(word);
+        const seekMs = place && place.timing !== null ? player.sections[index].timings[place.timing].start_ms + 1 : 0;
+        if (index === activeIndex && !sectionLoading && audioPlayer.src) {
+          // already loaded: just seek (the player's own seek, so a range
+          // starting here keeps its end)
+          ownSeekTarget = seekMs / 1000;
+          audioPlayer.currentTime = ownSeekTarget;
+          updateWordDisplay();
+          playAudio();
+        } else {
+          loadSection(index, seekMs);
+        }
+        return;
+      }
+      // Its audio has to be prepared first. Whatever was playing or loading
+      // stops now (a programmatic pause: focus mode stays), so it can't run
+      // on, end, and move playback somewhere else meanwhile. Only this
+      // section is prepared, never the ones between here and there.
+      if (sectionLoading) {
+        loadToken++; // the pending load gives up
+        sectionLoading = false;
+      }
+      audioPlayer.pause();
+      waitForSection(index, word, message || "Preparing this part of the document…");
+    }
+
+    // Plays the document from a global word (click-to-jump, a range's start,
+    // Start from Beginning), in whichever section holds it.
+    function playFromWord(globalIndex) {
+      if (!player) {
+        return;
+      }
+      const section = sectionForWord(player.sections, globalIndex);
+      if (!section) {
+        return;
+      }
+      requestSection(player.sections.indexOf(section), globalIndex);
+    }
+
+    // Stops waiting for a section: nothing plays, and it's no longer
+    // prepared unless its request has already started (a request can't be
+    // cancelled; its audio is still saved for later, but never played).
+    function cancelWaiting() {
+      if (!waitingFor) {
+        return;
+      }
+      waitingFor = null;
+      wantsToPlay = false;
+      hidePreparingNotice();
+      exitFocusMode();
+      playPauseButton.textContent = "Play";
+    }
+
+    preparingNoticePause.addEventListener("click", () => togglePlayPause());
+    document.getElementById("preparing-notice-cancel").addEventListener("click", cancelWaiting);
+
+    audioPlayer.addEventListener("play", () => {
+      // listening has started: prepare ahead from now on
+      if (player && !lookaheadEnabled) {
+        lookaheadEnabled = true;
+        schedulePreparation();
+      }
+    });
+
+    audioPlayer.addEventListener("playing", () => {
+      if (firstAudioTimer) {
+        preparationStats.firstAudio.push({ ...firstAudioTimer, ms: Math.round(performance.now() - firstAudioTimer.startedAt) });
+        firstAudioTimer = null;
+      }
+    });
+    // set when a document is started or opened, cleared at its first sound
+    let firstAudioTimer = null;
+
+    const namingPrompt = document.getElementById("naming-prompt");
+    const documentNameInput = document.getElementById("document-name-input");
+
+    const skipNameButton = document.getElementById("skip-name-button");
+
+    function showNamingPrompt(defaultName) {
+      documentNameInput.value = defaultName;
+      // a PDF is always saved: its pages and text live in the library
+      skipNameButton.style.display = pendingPdf ? "none" : "";
+      namingPrompt.style.display = "block";
+      documentNameInput.focus();
+    }
+
+    document.getElementById("start-button").addEventListener("click", () => {
+      pendingPdf = null;
+      showNamingPrompt("");
+    });
+
+    document.getElementById("confirm-name-button").addEventListener("click", () => {
+      const documentName = documentNameInput.value.trim();
+      namingPrompt.style.display = "none";
+      if (pendingPdf) {
+        const pdf = pendingPdf;
+        pendingPdf = null;
+        startPdfDocument(documentName || pdf.fileName, pdf);
+        return;
+      }
+      synthesize(documentName);
+    });
+
+    document.getElementById("skip-name-button").addEventListener("click", () => {
+      namingPrompt.style.display = "none";
+      synthesize("");
+    });
+
+    documentNameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        document.getElementById("confirm-name-button").click();
+      }
+    });
+
+    document.getElementById("retry-button").addEventListener("click", () => {
+      if (retryHandler) {
+        retryHandler();
+      }
+    });
+
+    // Audio that fails to load or play (missing, damaged, unsupported) is
+    // reported instead of failing silently. Retry generates only the affected
+    // section again (saved over the damaged one for a library document) and
+    // resumes at the same word.
+    audioPlayer.addEventListener("error", () => {
+      const mediaError = audioPlayer.error;
+      console.error("Audio failed to load or play:", mediaError && mediaError.code, mediaError && mediaError.message);
+      exitFocusMode();
+      sectionLoading = false;
+      if (!player || activeIndex < 0) {
+        return;
+      }
+      const index = activeIndex;
+      const snapshot = player;
+      const local = getCurrentWordIndexForPosition();
+      const resumeWord = local >= 0 ? globalWordIndex(local) : null;
+      showLoadError("This audio couldn't be played (the file may be missing or damaged).", () => {
+        if (player === snapshot) {
+          requestSection(index, resumeWord, { regenerate: true, message: "Generating this part's audio again…" });
+        }
+      });
+    });
+
+    renderLibrary();
+
+    audioPlayer.addEventListener("playing", () => {
+      loadingIndicator.style.display = "none";
+    });
+
+    // Uses the same lookup as position saving: in the silence between words
+    // (punctuation pauses) it keeps showing the most recently spoken word
+    // rather than going blank, so a pause there still shows where you are.
+    function updateWordDisplay() {
+      if (equationOnScreen) {
+        return; // an equation is shown instead
+      }
+      const currentIndex = getCurrentWordIndexForPosition();
+
+      if (currentIndex === -1) {
+        // In the silence before a section's first word, keep showing the
+        // previous section's last chunk (as in a pause between sentences);
+        // blank only at the start of the document.
+        const previous = player && activeIndex > 0 && isReady(activeIndex - 1) ? player.sections[activeIndex - 1].timings : null;
+        if (previous) {
+          showCaption(captionGroup(previous, previous.length - 1).map((w) => w.word).join(" "));
+        } else {
+          showCaption("");
+        }
+        return;
+      }
+
+      showCaption(captionGroup(words, currentIndex).map((w) => w.word).join(" "));
+    }
+
+    // Puts caption text on screen. In Education mode, welded sounds are green
+    // (weldedRanges) and short vowels pink (shortVowelIndexes); a welded unit
+    // is read as one sound, so its vowel is green, not pink. Prefixes and
+    // suffixes get a thin yellow box (affixRanges), once the word list they
+    // need has loaded. Rebuilt only when the text, mode or word list changes.
+    let shownCaption = null;
+    // The word list affixRanges checks stems against (frontend/words.txt),
+    // loaded the first time Education mode is on; null until then.
+    let affixWords = null;
+    let affixWordsRequested = false;
+    function loadAffixWords() {
+      if (affixWordsRequested) {
+        return;
+      }
+      affixWordsRequested = true;
+      fetch("words.txt")
+        .then((response) => (response.ok ? response.text() : Promise.reject(new Error(`status ${response.status}`))))
+        .then((text) => {
+          affixWords = new Set(text.split("\n").filter((line) => line && !line.startsWith("#")));
+          shownCaption = null; // redraw with boxes
+          updateWordDisplay();
+        })
+        .catch((error) => {
+          affixWordsRequested = false; // try again next time
+          console.warn("The word list for prefix/suffix boxes couldn't be loaded:", error);
+        });
+    }
+    function showCaption(text) {
+      const education = document.body.classList.contains("mode-education");
+      const key = (education ? "e:" : "n:") + text;
+      if (key === shownCaption) {
+        return;
+      }
+      shownCaption = key;
+      if (!education) {
+        wordDisplay.textContent = text;
+        return;
+      }
+      wordDisplay.textContent = "";
+      text.split(/(\s+)/).forEach((part) => {
+        const kind = new Array(part.length).fill(""); // by string index, like the rules
+        shortVowelIndexes(part).forEach((i) => { kind[i] = "short-vowel"; });
+        weldedRanges(part).forEach(([start, end]) => kind.fill("welded", start, end));
+        // which affix (prefix/suffix) each letter is in, -1 for none
+        const affix = new Array(part.length).fill(-1);
+        if (affixWords) {
+          affixRanges(part, (w) => affixWords.has(w)).forEach(([start, end], n) => affix.fill(n, start, end));
+        }
+        // colored runs: consecutive letters of the same kind in one span
+        const appendColored = (parent, from, to) => {
+          let i = from;
+          while (i < to) {
+            let j = i;
+            while (j < to && kind[j] === kind[i]) j++;
+            if (kind[i]) {
+              const span = document.createElement("span");
+              span.className = kind[i];
+              span.textContent = part.slice(i, j);
+              parent.append(span);
+            } else {
+              parent.append(part.slice(i, j));
+            }
+            i = j;
+          }
+        };
+        let i = 0;
+        while (i < part.length) {
+          let j = i;
+          while (j < part.length && affix[j] === affix[i]) j++;
+          if (affix[i] >= 0) {
+            const box = document.createElement("span");
+            box.className = "affix";
+            appendColored(box, i, j);
+            wordDisplay.append(box);
+          } else {
+            appendColored(wordDisplay, i, j);
+          }
+          i = j;
+        }
+      });
+    }
+
+    // The timings shown together with timing `index`: its group of chunkSize
+    // words, or in phrase mode its phrase (phraseRanges, worked out once per
+    // section's timings).
+    const phraseRangeCache = new WeakMap();
+    function captionGroup(timings, index) {
+      if (chunkSize > 0) {
+        const start = Math.floor(index / chunkSize) * chunkSize;
+        return timings.slice(start, start + chunkSize);
+      }
+      if (!phraseRangeCache.has(timings)) {
+        phraseRangeCache.set(timings, phraseRanges(timings, player ? player.words : []));
+      }
+      const [start, end] = phraseRangeCache.get(timings).find(([a, b]) => index >= a && index < b);
+      return timings.slice(start, end);
+    }
+
+    audioPlayer.addEventListener("timeupdate", () => {
+      enforceSelectionStop();
+      checkEquationHold();
+      updateWordDisplay();
+    });
+
+    // timeupdate alone fires too infrequently to reliably catch very short words,
+    // so also poll on every animation frame while actively playing.
+    let animationFrameId = null;
+    function animationFrameLoop() {
+      enforceSelectionStop();
+      checkEquationHold();
+      updateWordDisplay();
+      animationFrameId = requestAnimationFrame(animationFrameLoop);
+    }
+
+    audioPlayer.addEventListener("play", () => {
+      if (animationFrameId === null) {
+        animationFrameId = requestAnimationFrame(animationFrameLoop);
+      }
+    });
+
+    audioPlayer.addEventListener("pause", () => {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+      // show the exact paused position now, not on the next timeupdate
+      updateWordDisplay();
+    });
+
+    // rAF can be throttled (background tabs, some embedded browsers), leaving
+    // only timeupdate's ~4Hz, so the display lags. Backstop: a timer aimed at
+    // the next word's start, re-aimed on every seek and speed change.
+    let wordTimerId = null;
+    function scheduleNextWordUpdate() {
+      clearTimeout(wordTimerId);
+      wordTimerId = null;
+      if (audioPlayer.paused) {
+        return;
+      }
+      const next = words[getCurrentWordIndexForPosition() + 1];
+      if (!next) {
+        return;
+      }
+      const delayMs = (next.start_ms - audioPlayer.currentTime * 1000) / audioPlayer.playbackRate;
+      wordTimerId = setTimeout(() => {
+        updateWordDisplay();
+        scheduleNextWordUpdate();
+      }, Math.max(0, delayMs) + 1);
+    }
+
+    ["play", "seeked", "ratechange", "pause"].forEach((eventName) => {
+      audioPlayer.addEventListener(eventName, scheduleNextWordUpdate);
+    });
+
+    // Set only when the user asks to pause (Pause button or Space), so the
+    // pause event can tell that apart from programmatic pauses such as the
+    // Play Selection auto-stop.
+    let userPauseRequested = false;
+
+    function togglePlayPause() {
+      if (!player && !audioPlayer.src) {
+        return;
+      }
+      if (equationHold) {
+        wantsToPlay = false;
+        pauseEquationHold();
+        exitFocusMode();
+        return;
+      }
+      if (waitingFor) {
+        // waiting for a section's audio: this decides whether it plays once
+        // it's ready (it keeps preparing either way)
+        wantsToPlay = !wantsToPlay;
+        playPauseButton.textContent = wantsToPlay ? "Pause" : "Play";
+        if (wantsToPlay && isReady(waitingFor.index)) {
+          startWaitingSection();
+        } else if (wantsToPlay) {
+          showPreparingNotice(waitingFor.message);
+        } else {
+          exitFocusMode();
+          showPreparingNotice(isReady(waitingFor.index)
+            ? "Ready. Press Play (or Space) to continue."
+            : "Paused. This part is still being prepared; press Play (or Space) to continue.");
+        }
+        return;
+      }
+      if (player && activeIndex < 0 && !sectionLoading) {
+        // opened for browsing, nothing loaded yet (the audio element may
+        // still hold another document): start at its saved position
+        if (player.startWord >= 0) {
+          playFromWord(player.startWord);
+        } else {
+          requestSection(0, null);
+        }
+        return;
+      }
+      if (sectionLoading) {
+        // a section is loading: this decides whether it plays when it's ready
+        wantsToPlay = !wantsToPlay;
+        playPauseButton.textContent = wantsToPlay ? "Pause" : "Play";
+        if (!wantsToPlay) {
+          exitFocusMode();
+        }
+        return;
+      }
+      if (audioPlayer.paused) {
+        wantsToPlay = true;
+        if (audioPlayer.ended && player && activeIndex + 1 < player.sections.length) {
+          // stopped at the end of a section: carry on with the next one
+          const next = activeIndex + 1;
+          requestSection(next, null, { message: "Preparing the next section…", continuing: true });
+          return;
+        }
+        playAudio();
+      } else {
+        wantsToPlay = false;
+        userPauseRequested = true;
+        audioPlayer.pause();
+      }
+    }
+
+    // Back 10 / Forward 10 move by audio seconds across neighbouring prepared
+    // sections, stopping at the edge of the prepared audio around the current
+    // position: never across a section without audio, and never generating
+    // any.
+    function skipBy(seconds) {
+      // not while waiting for a jump's audio: that would restart the audio
+      // it left (Cancel returns there)
+      if (!player || activeIndex < 0 || sectionLoading || waitingFor) {
+        return;
+      }
+      let index = activeIndex;
+      let ms = audioPlayer.currentTime * 1000 + seconds * 1000;
+      while (ms < 0) {
+        if (!isReady(index - 1)) {
+          ms = 0;
+          break;
+        }
+        index -= 1;
+        ms += sectionDurationMs(index);
+      }
+      while (ms > sectionDurationMs(index)) {
+        if (!isReady(index + 1)) {
+          ms = sectionDurationMs(index);
+          break;
+        }
+        ms -= sectionDurationMs(index);
+        index += 1;
+      }
+      // during an equation hold the audio is paused but the reader is
+      // listening: carry on playing from the new place, as when playing
+      const playing = !audioPlayer.paused || (!!equationHold && wantsToPlay);
+      cancelEquationHold();
+      if (index === activeIndex) {
+        audioPlayer.currentTime = ms / 1000; // the seeking handler re-arms
+        if (playing && audioPlayer.paused) {
+          playAudio();
+        }
+        return;
+      }
+      // a user's seek: it ends a playing selection, like any other seek
+      selectionStopWord = null;
+      armEquations(wordAtMs(index, ms));
+      wantsToPlay = playing;
+      loadSection(index, ms);
+    }
+
+    function skipBack() {
+      skipBy(-10);
+    }
+
+    function skipForward() {
+      skipBy(10);
+    }
+
+    // A section ending isn't the document ending: the next section carries on
+    // (its audio preloaded), or, if it has no audio yet, playback stops there
+    // with a way to prepare it. Only the last section ending ends focus mode.
+    audioPlayer.addEventListener("ended", () => {
+      if (!player || activeIndex < 0) {
+        exitFocusMode();
+        return;
+      }
+      // an equation still due in this section (e.g. after its last word) is
+      // shown before moving on; the hold continues from here when it ends
+      if (checkEquationHold({ atSectionEnd: true })) {
+        return;
+      }
+      continueAfterSectionEnd();
+    });
+
+    function continueAfterSectionEnd() {
+      if (selectionStopWord !== null) {
+        const stopSection = sectionForWord(player.sections, selectionStopWord);
+        if (player.sections.indexOf(stopSection) <= activeIndex) {
+          // a selection ending in this section never starts the next one
+          selectionStopWord = null;
+          lookaheadEnabled = false;
+          return;
+        }
+      }
+      const next = activeIndex + 1;
+      if (next >= player.sections.length) {
+        exitFocusMode();
+        return;
+      }
+      if (isReady(next)) {
+        wantsToPlay = true;
+        loadSection(next, 0);
+        return;
+      }
+      // wait for it (still in focus mode, with its own Pause), preparing it first
+      waitForSection(next, null, "Preparing the next section…");
+    }
+
+    // --- Equations (step 32) -------------------------------------------------
+    // Playback holds on each display equation it crosses: the audio pauses
+    // (programmatically: focus mode stays, no paused hint), the equation text
+    // replaces the caption for exactly 5 s, then playback resumes where it
+    // was. A marker holds at the end of the word it follows; one before a
+    // section's first word (or before the document's first word) holds as
+    // that section starts. Each marker fires once during continuous playback.
+    // An explicit seek (a jump, Back/Forward 10, scrubbing, reopening, Start
+    // from Beginning, a range) re-arms from the new word (armEquations),
+    // including the marker right before it. A user pause, a seek, a section
+    // load or a document change cancels a running hold, so its timer can't
+    // resume anything stale. Inline math (inline: true) isn't held: it's a
+    // symbol inside a sentence, and the page view shows it.
+    const EQUATION_HOLD_MS = 5000;
+    let equationArmFrom = Infinity; // markers after words >= this can fire
+    const firedEquations = new Set(); // afterWord of markers already shown
+    let equationHold = null; // {timerId, token, fromEnd} while holding
+    let equationOnScreen = false; // the caption shows an equation
+    let equationCheckTimerId = null;
+
+    function armEquations(word) {
+      equationArmFrom = word - 1;
+      firedEquations.clear();
+    }
+
+    // The display equations that can still fire in the active section,
+    // grouped by the word they follow, with the ms where each holds.
+    function pendingEquationHolds() {
+      const section = player.sections[activeIndex];
+      const byWord = new Map();
+      player.equationMarkers.forEach((marker) => {
+        const w = marker.afterWord;
+        if (marker.inline || w < equationArmFrom || w >= section.wordEnd || firedEquations.has(w)) {
+          return;
+        }
+        if (selectionStopWord !== null && w >= selectionStopWord) {
+          return; // after a playing range's end
+        }
+        if (!byWord.has(w)) {
+          byWord.set(w, []);
+        }
+        byWord.get(w).push(marker);
+      });
+      const holds = [];
+      byWord.forEach((markers, w) => {
+        let ms = 0; // before this section's first word: as it starts
+        if (w >= section.wordStart) {
+          const end = wordEndMs(w);
+          if (!end || end.index !== activeIndex) {
+            return;
+          }
+          ms = end.ms;
+        }
+        holds.push({ w, ms, markers });
+      });
+      return holds.sort((a, b) => a.ms - b.ms);
+    }
+
+    // Starts a hold if playback has reached one (at a section's end: the
+    // next one left in it, so moving on can't skip it); otherwise aims a
+    // timer at the next one, as rAF can be throttled. Returns true if a
+    // hold started.
+    function checkEquationHold({ atSectionEnd = false } = {}) {
+      clearTimeout(equationCheckTimerId);
+      equationCheckTimerId = null;
+      if (!player || activeIndex < 0 || sectionLoading || equationHold || waitingFor) {
+        return false;
+      }
+      if (!atSectionEnd && audioPlayer.paused) {
+        return false;
+      }
+      const holds = pendingEquationHolds();
+      if (!holds.length) {
+        return false;
+      }
+      const nowMs = audioPlayer.currentTime * 1000;
+      if (atSectionEnd || holds[0].ms <= nowMs) {
+        startEquationHold(holds[0], atSectionEnd);
+        return true;
+      }
+      equationCheckTimerId = setTimeout(checkEquationHold, (holds[0].ms - nowMs) / audioPlayer.playbackRate);
+      return false;
+    }
+
+    function startEquationHold(hold, fromEnd) {
+      firedEquations.add(hold.w);
+      const token = loadToken;
+      equationHold = { token, fromEnd, timerId: setTimeout(() => endEquationHold(token), EQUATION_HOLD_MS) };
+      equationOnScreen = true;
+      document.body.classList.add("equation-hold");
+      wordDisplay.classList.add("equation");
+      wordDisplay.textContent = hold.markers.map((marker) => marker.text).join("\n");
+      shownCaption = null;
+      if (!audioPlayer.paused) {
+        audioPlayer.pause(); // programmatic: focus mode stays on
+      }
+    }
+
+    // After 5 s: carry on where the hold began, unless anything changed.
+    function endEquationHold(token) {
+      if (!equationHold || equationHold.token !== token) {
+        return;
+      }
+      if (token !== loadToken) {
+        cancelEquationHold(); // something else was loaded or asked for meanwhile
+        return;
+      }
+      const { fromEnd } = equationHold;
+      cancelEquationHold();
+      if (!wantsToPlay) {
+        return;
+      }
+      if (fromEnd) {
+        if (!checkEquationHold({ atSectionEnd: true })) {
+          continueAfterSectionEnd();
+        }
+      } else {
+        playAudio();
+      }
+    }
+
+    // Ends any hold now and puts the caption back.
+    function cancelEquationHold() {
+      if (equationHold) {
+        clearTimeout(equationHold.timerId);
+        equationHold = null;
+        document.body.classList.remove("equation-hold");
+      }
+      if (equationOnScreen) {
+        equationOnScreen = false;
+        wordDisplay.classList.remove("equation");
+        updateWordDisplay();
+      }
+    }
+
+    // The reader paused during a hold: nothing resumes by itself, and the
+    // equation stays on screen until playback starts again.
+    function pauseEquationHold() {
+      clearTimeout(equationHold.timerId);
+      equationHold = null;
+      document.body.classList.remove("equation-hold");
+    }
+
+    audioPlayer.addEventListener("play", () => {
+      if (!equationHold) {
+        cancelEquationHold();
+      }
+      checkEquationHold();
+    });
+    audioPlayer.addEventListener("pause", () => checkEquationHold());
+    audioPlayer.addEventListener("ratechange", () => checkEquationHold());
+
+    // The global word at `ms` in section `index`'s audio.
+    function wordAtMs(index, ms) {
+      const section = player.sections[index];
+      let word = section.wordStart;
+      section.timings.forEach((t) => {
+        if (t.wordIndex != null && t.start_ms <= ms) {
+          word = t.wordIndex;
+        }
+      });
+      return word;
+    }
+
+    playPauseButton.addEventListener("click", togglePlayPause);
+
+    audioPlayer.addEventListener("play", () => {
+      playPauseButton.textContent = "Pause";
+    });
+
+    audioPlayer.addEventListener("pause", () => {
+      playPauseButton.textContent = "Play";
+    });
+
+    document.getElementById("back-button").addEventListener("click", skipBack);
+    document.getElementById("forward-button").addEventListener("click", skipForward);
+
+    // Focus mode: while playing, only the chunk display is shown. Exits on a
+    // user-initiated pause or when playback reaches the end of the audio.
+    function enterFocusMode() {
+      if (document.body.classList.contains("focus-mode")) {
+        return;
+      }
+      document.body.classList.add("focus-mode");
+    }
+
+    function exitFocusMode() {
+      if (!document.body.classList.contains("focus-mode")) {
+        return;
+      }
+      document.body.classList.remove("focus-mode");
+      // land on the chunk display and playback controls, not wherever the
+      // page happened to be scrolled before playback started
+      window.scrollTo(0, 0);
+    }
+
+    audioPlayer.addEventListener("play", () => {
+      document.body.classList.remove("audio-paused");
+      // a pause request whose "pause" event was dropped (a new source loaded
+      // straight after it) mustn't turn a later programmatic pause into a
+      // user one
+      userPauseRequested = false;
+      enterFocusMode();
+    });
+
+    audioPlayer.addEventListener("pause", () => {
+      document.body.classList.add("audio-paused");
+      if (userPauseRequested) {
+        userPauseRequested = false;
+        exitFocusMode();
+      }
+    });
+
+
+    // Keyboard shortcuts. Registered in the capture phase on window so they run
+    // before a focused button or the native <audio> controls can also react to
+    // the same key (which would double-toggle).
+    function isTypingTarget(target) {
+      return (
+        target instanceof HTMLElement &&
+        (target.tagName === "TEXTAREA" || target.tagName === "INPUT" || target.isContentEditable)
+      );
+    }
+
+    const SHORTCUT_KEYS = [" ", "ArrowLeft", "ArrowRight"];
+
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (!SHORTCUT_KEYS.includes(event.key) || isTypingTarget(event.target)) {
+          return;
+        }
+        if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        // holding a key down auto-repeats keydown; act once per physical press
+        if (event.repeat) {
+          return;
+        }
+        if (event.key === " ") {
+          togglePlayPause();
+        } else if (event.key === "ArrowLeft") {
+          skipBack();
+        } else {
+          skipForward();
+        }
+      },
+      true
+    );
+
+    // Buttons activate on Space's keyup, so swallow that too.
+    window.addEventListener(
+      "keyup",
+      (event) => {
+        if (event.key === " " && !isTypingTarget(event.target)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      },
+      true
+    );
+
+    document.querySelectorAll(".speed-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        audioPlayer.playbackRate = parseFloat(button.dataset.speed);
+
+        document.querySelectorAll(".speed-button").forEach((b) => b.classList.remove("active"));
+        button.classList.add("active");
+      });
+    });
+
+    // Normal / Education mode. Both share everything; Education adds its
+    // own features, marked with the education-only class (hidden in Normal).
+    // The choice is remembered in this browser.
+    function setMode(mode) {
+      document.body.classList.toggle("mode-education", mode === "education");
+      document.querySelectorAll(".mode-tab").forEach((tab) => {
+        tab.setAttribute("aria-selected", String(tab.dataset.mode === mode));
+      });
+      if (mode === "education") {
+        loadAffixWords();
+      }
+      updateWordDisplay(); // show the caption in this mode's style
+      try {
+        localStorage.setItem("focusReaderMode", mode);
+      } catch (error) {
+        // storage unavailable (private window): the mode just isn't remembered
+      }
+    }
+
+    document.querySelectorAll(".mode-tab").forEach((tab) => {
+      tab.addEventListener("click", () => setMode(tab.dataset.mode));
+    });
+    try {
+      setMode(localStorage.getItem("focusReaderMode") === "education" ? "education" : "normal");
+    } catch (error) {
+      setMode("normal");
+    }
+
+    // Caption text size: scales the caption (and an equation shown in its
+    // place) from the default size.
+    document.querySelectorAll(".size-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        wordDisplay.style.setProperty("--caption-scale", button.dataset.scale);
+        document.querySelectorAll(".size-button").forEach((b) => b.classList.remove("active"));
+        button.classList.add("active");
+      });
+    });
+
+    document.querySelectorAll(".chunk-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        chunkSize = parseInt(button.dataset.chunkSize, 10);
+
+        document.querySelectorAll(".chunk-button").forEach((b) => b.classList.remove("active"));
+        button.classList.add("active");
+
+        // while playing, the sync loop picks up the new size on its own
+        if (audioPlayer.paused) {
+          updateWordDisplay();
+        }
+      });
+    });
+
+    const textInput = document.getElementById("text-input");
+    const toggleFullDocumentButton = document.getElementById("toggle-full-document-button");
+    const fullDocumentView = document.getElementById("full-document-view");
+
+    // --- PDF pages: one page at a time, plus search -------------------------
+    // Pages are physical pages of the file (the Nth page, not the number
+    // printed on it). Only the viewed page's words are rendered, as the same
+    // clickable global words as the full-document view. Browsing pages and
+    // searching never generate audio.
+    let viewedPage = 1;
+    let searchHit = null; // {first, last} global words of the chosen search match
+    const pageControls = document.getElementById("page-controls");
+    const pageCounter = document.getElementById("page-counter");
+    const pageInput = document.getElementById("page-input");
+    const searchInput = document.getElementById("search-input");
+    const searchResults = document.getElementById("search-results");
+
+    function isPagedDocument() {
+      return !!(player && player.pageCount);
+    }
+
+    function renderPage() {
+      const count = player.pageCount;
+      viewedPage = Math.min(Math.max(1, viewedPage), count);
+      pageCounter.textContent = `Page ${viewedPage} of ${count}`;
+      pageInput.max = count;
+      document.getElementById("previous-page-button").disabled = viewedPage <= 1;
+      document.getElementById("next-page-button").disabled = viewedPage >= count;
+      fullDocumentView.textContent = "";
+
+      const range = player.pageRanges[viewedPage - 1];
+      const markers = player.equationMarkers.filter((marker) => marker.page === viewedPage);
+      const addMarker = (marker) => {
+        const element = document.createElement("span");
+        element.className = marker.inline ? "equation-inline" : "equation-block";
+        element.title = "Equation (not read aloud)";
+        element.textContent = marker.inline ? ` ⟨${marker.text}⟩ ` : `Equation: ${marker.text}`;
+        fullDocumentView.appendChild(element);
+      };
+      if (!range) {
+        // an empty page, or one with only equations: browsable, nothing to speak
+        const note = document.createElement("span");
+        note.className = "page-note";
+        note.textContent = markers.length
+          ? "This page has only equations, which aren't read aloud."
+          : "This page has no text to read aloud.";
+        fullDocumentView.appendChild(note);
+        markers.forEach(addMarker);
+        return;
+      }
+
+      const text = player.text;
+      const markersAfter = new Map();
+      const before = [];
+      const after = [];
+      markers.forEach((marker) => {
+        if (marker.afterWord < range.first) {
+          before.push(marker);
+        } else if (marker.afterWord > range.last) {
+          after.push(marker);
+        } else {
+          if (!markersAfter.has(marker.afterWord)) {
+            markersAfter.set(marker.afterWord, []);
+          }
+          markersAfter.get(marker.afterWord).push(marker);
+        }
+      });
+      before.forEach(addMarker);
+      let cursor = player.words[range.first].start;
+      for (let index = range.first; index <= range.last; index++) {
+        const w = player.words[index];
+        if (w.start != null && w.start >= cursor && comparableText(w.word)) {
+          if (w.start > cursor) {
+            fullDocumentView.appendChild(document.createTextNode(text.slice(cursor, w.start)));
+          }
+          const span = document.createElement("span");
+          span.className = "document-word";
+          span.dataset.wordIndex = index;
+          span.textContent = text.slice(w.start, w.end);
+          if (searchHit && index >= searchHit.first && index <= searchHit.last) {
+            span.classList.add("search-hit");
+          }
+          fullDocumentView.appendChild(span);
+          cursor = w.end;
+        }
+        (markersAfter.get(index) || []).forEach(addMarker);
+      }
+      after.forEach(addMarker);
+      applySelectionHighlight();
+      const hit = fullDocumentView.querySelector(".search-hit");
+      if (hit) {
+        hit.scrollIntoView({ block: "center" });
+      }
+    }
+
+    function goToPage(page) {
+      if (!isPagedDocument() || !Number.isFinite(page)) {
+        return;
+      }
+      viewedPage = Math.min(Math.max(1, Math.round(page)), player.pageCount);
+      renderPage();
+    }
+
+    document.getElementById("previous-page-button").addEventListener("click", () => goToPage(viewedPage - 1));
+    document.getElementById("next-page-button").addEventListener("click", () => goToPage(viewedPage + 1));
+    document.getElementById("go-to-page-button").addEventListener("click", () => goToPage(parseInt(pageInput.value, 10)));
+    pageInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        goToPage(parseInt(pageInput.value, 10));
+      }
+    });
+
+    // The global word whose text contains character `position`.
+    function wordAtCharacter(position) {
+      let low = 0;
+      let high = player.words.length - 1;
+      let found = 0;
+      while (low <= high) {
+        const middle = (low + high) >> 1;
+        if (player.words[middle].start != null && player.words[middle].start <= position) {
+          found = middle;
+          low = middle + 1;
+        } else {
+          high = middle - 1;
+        }
+      }
+      return found;
+    }
+
+    const SEARCH_RESULT_LIMIT = 200;
+
+    // Every match of the query in the whole document's reading text (case-
+    // insensitive; spaces in the query match any run of whitespace, so a
+    // phrase across a line or paragraph break is still found).
+    function searchDocument(query) {
+      const terms = query.trim().split(/\s+/).filter(Boolean);
+      if (!terms.length) {
+        return [];
+      }
+      const pattern = new RegExp(terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"), "gi");
+      const text = player.text;
+      const matches = [];
+      for (const match of text.matchAll(pattern)) {
+        const first = wordAtCharacter(match.index);
+        const last = wordAtCharacter(match.index + match[0].length - 1);
+        const from = Math.max(0, match.index - 50);
+        const to = Math.min(text.length, match.index + match[0].length + 50);
+        matches.push({
+          first, last, page: player.words[first].page,
+          before: (from > 0 ? "…" : "") + text.slice(from, match.index).replace(/\s+/g, " "),
+          match: match[0].replace(/\s+/g, " "),
+          after: text.slice(match.index + match[0].length, to).replace(/\s+/g, " ") + (to < text.length ? "…" : ""),
+        });
+      }
+      return matches;
+    }
+
+    function runSearch() {
+      if (!isPagedDocument()) {
+        return;
+      }
+      const query = searchInput.value;
+      searchResults.textContent = "";
+      const summary = document.createElement("p");
+      summary.className = "search-summary";
+      searchResults.appendChild(summary);
+      if (!query.trim()) {
+        summary.textContent = "Type something to search for.";
+        return;
+      }
+      const matches = searchDocument(query);
+      if (!matches.length) {
+        summary.textContent = `No matches for "${query.trim()}" in this document.`;
+        return;
+      }
+      summary.textContent = matches.length === 1 ? "1 match" : `${matches.length} matches`
+        + (matches.length > SEARCH_RESULT_LIMIT ? ` (showing the first ${SEARCH_RESULT_LIMIT})` : "");
+      matches.slice(0, SEARCH_RESULT_LIMIT).forEach((match) => {
+        const button = document.createElement("button");
+        const strong = document.createElement("strong");
+        strong.textContent = match.match;
+        button.append(`Page ${match.page}: ${match.before}`, strong, match.after);
+        button.addEventListener("click", () => {
+          searchHit = { first: match.first, last: match.last };
+          goToPage(match.page);
+        });
+        searchResults.appendChild(button);
+      });
+    }
+
+    document.getElementById("search-button").addEventListener("click", runSearch);
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        runSearch();
+      }
+    });
+
+    // Renders the textarea text verbatim. When it's the open document's text,
+    // each of the document's words (its global word indices) is a clickable
+    // span at its place in the text; everything between words (spaces, line
+    // breaks) and words with nothing to speak (e.g. "—") stay plain text.
+    function updateFullDocumentView() {
+      const text = textInput.value;
+      fullDocumentView.textContent = "";
+      updateEntryPoints();
+      const paged = isPagedDocument() && text === player.text;
+      pageControls.style.display = paged && fullDocumentView.style.display === "block" ? "block" : "none";
+      if (paged) {
+        renderPage(); // a PDF shows one page at a time
+        return;
+      }
+
+      if (!player || text !== player.text) {
+        fullDocumentView.textContent = text;
+        return;
+      }
+
+      let cursor = 0;
+      player.words.forEach((w, index) => {
+        if (w.start == null || w.start < cursor || !comparableText(w.word)) {
+          return;
+        }
+        if (w.start > cursor) {
+          fullDocumentView.appendChild(document.createTextNode(text.slice(cursor, w.start)));
+        }
+        const span = document.createElement("span");
+        span.className = "document-word";
+        span.dataset.wordIndex = index;
+        span.textContent = text.slice(w.start, w.end);
+        fullDocumentView.appendChild(span);
+        cursor = w.end;
+      });
+      if (cursor < text.length) {
+        fullDocumentView.appendChild(document.createTextNode(text.slice(cursor)));
+      }
+      applySelectionHighlight();
+    }
+
+    // Start/end range selection, in global word indices (so a range can span
+    // sections); the end is always normalized so selectionStartIndex <=
+    // selectionEndIndex.
+    const selectModeButton = document.getElementById("select-mode-button");
+    const playSelectionButton = document.getElementById("play-selection-button");
+    let isSelectMode = false;
+    // Find Start Point was chosen: the hint says to click a word
+    let findingStartPoint = false;
+    let selectionStartIndex = null;
+    let selectionEndIndex = null;
+    // While a selection is playing: the global word to stop after.
+    let selectionStopWord = null;
+
+    function clearSelection() {
+      selectionStartIndex = null;
+      selectionEndIndex = null;
+      selectionStopWord = null;
+      applySelectionHighlight();
+    }
+
+    function applySelectionHighlight() {
+      fullDocumentView.querySelectorAll(".document-word").forEach((span) => {
+        const index = parseInt(span.dataset.wordIndex, 10);
+        span.classList.toggle("range-start", index === selectionStartIndex);
+        span.classList.toggle("range-end", index === selectionEndIndex);
+        span.classList.toggle(
+          "range-between",
+          selectionEndIndex !== null && index > selectionStartIndex && index < selectionEndIndex
+        );
+      });
+      playSelectionButton.disabled = selectionStartIndex === null || selectionEndIndex === null;
+      updateEntryHint();
+    }
+
+    selectModeButton.addEventListener("click", () => setSelectMode(!isSelectMode));
+
+    // Plays from the start word, across sections, and stops after the end word
+    // without starting the section that follows it.
+    playSelectionButton.addEventListener("click", () => {
+      if (selectionStartIndex === null || selectionEndIndex === null || !player) {
+        return;
+      }
+      // only the start's section is prepared now; the lookahead then stops at
+      // the section the range ends in
+      selectionStopWord = selectionEndIndex;
+      playFromWord(selectionStartIndex);
+    });
+
+    // Checked every animation frame and timeupdate, but rAF can be throttled
+    // (background tabs) and timeupdate only fires ~4x/sec, so each check also
+    // re-arms a timer aimed at the exact stop moment as a precise backstop.
+    let selectionStopTimeoutId = null;
+    function enforceSelectionStop() {
+      clearTimeout(selectionStopTimeoutId);
+      selectionStopTimeoutId = null;
+      if (selectionStopWord === null || !player || sectionLoading) {
+        return;
+      }
+      const stop = wordEndMs(selectionStopWord);
+      if (!stop || stop.index !== activeIndex) {
+        return; // it ends in a later section
+      }
+      const remainingMs = stop.ms - audioPlayer.currentTime * 1000;
+      if (remainingMs <= 0) {
+        selectionStopWord = null;
+        // nothing past the range is prepared until the reader plays on
+        lookaheadEnabled = false;
+        audioPlayer.pause();
+      } else if (!audioPlayer.paused) {
+        selectionStopTimeoutId = setTimeout(enforceSelectionStop, remainingMs / audioPlayer.playbackRate);
+      }
+    }
+
+    audioPlayer.addEventListener("play", enforceSelectionStop);
+
+    // Any seek other than the player's own (loading a section at a word, Play
+    // Selection's start) — Back/Forward, click-to-jump, scrubbing the native
+    // audio bar — returns to normal full-document playback.
+    audioPlayer.addEventListener("seeking", () => {
+      if (ownSeekTarget !== null && Math.abs(audioPlayer.currentTime - ownSeekTarget) < 0.001) {
+        ownSeekTarget = null;
+        return;
+      }
+      ownSeekTarget = null;
+      selectionStopWord = null;
+      cancelEquationHold();
+      if (player && activeIndex >= 0) {
+        armEquations(Math.max(0, globalWordIndex(getCurrentWordIndexForPosition())));
+      }
+    });
+
+    fullDocumentView.addEventListener("click", (event) => {
+      const span = event.target.closest(".document-word");
+      if (!span) {
+        return;
+      }
+      const index = parseInt(span.dataset.wordIndex, 10);
+
+      if (isSelectMode) {
+        if (selectionStartIndex === null || selectionEndIndex !== null) {
+          // first click, or a completed selection exists: start a new one
+          selectionStartIndex = index;
+          selectionEndIndex = null;
+        } else {
+          selectionEndIndex = Math.max(index, selectionStartIndex);
+          selectionStartIndex = Math.min(index, selectionStartIndex);
+        }
+        applySelectionHighlight();
+        return;
+      }
+
+      // click-to-jump to an exact global word, in whichever section holds it
+      // (Find Start Point ends here); a jump ends any playing range
+      findingStartPoint = false;
+      updateEntryHint();
+      selectionStopWord = null;
+      playFromWord(index);
+    });
+
+    // --- Reading entry points ----------------------------------------------
+    // Start from Beginning, Find Start Point (browse or search, then click a
+    // word) and Select Range (start and end anywhere in the document). All of
+    // them play the one document at its one position; only the sections
+    // playback needs are prepared.
+    const readingEntryPoints = document.getElementById("reading-entry-points");
+    const entryHint = document.getElementById("entry-hint");
+
+    // Shown while the text in the box is the open document's (its words are
+    // then clickable); hidden once it's edited into something else.
+    function updateEntryPoints() {
+      const open = !!player && textInput.value === player.text;
+      readingEntryPoints.style.display = open ? "flex" : "none";
+      if (!open && isSelectMode) {
+        setSelectMode(false);
+      }
+      updateEntryHint();
+    }
+
+    function wordLabel(globalIndex) {
+      const w = player.words[globalIndex];
+      const where = isPagedDocument() && w.page ? `page ${w.page}, ` : "";
+      return `${where}“${w.word}”`;
+    }
+
+    function updateEntryHint() {
+      if (!player) {
+        entryHint.textContent = "";
+      } else if (isSelectMode && selectionStartIndex === null) {
+        entryHint.textContent = "Click the first word of the range, then the last one (on any page).";
+      } else if (isSelectMode && selectionEndIndex === null) {
+        entryHint.textContent = `Range starts at ${wordLabel(selectionStartIndex)}. Now click its last word.`;
+      } else if (selectionStartIndex !== null && selectionEndIndex !== null) {
+        entryHint.textContent = `Range: ${wordLabel(selectionStartIndex)} to ${wordLabel(selectionEndIndex)}. Press Play Range; it stops after the last word.`;
+      } else if (findingStartPoint) {
+        entryHint.textContent = isPagedDocument()
+          ? "Go to a page or search, then click the word to start reading from."
+          : "Click the word to start reading from.";
+      } else {
+        entryHint.textContent = "";
+      }
+    }
+
+    function showDocumentView() {
+      if (fullDocumentView.style.display !== "block") {
+        toggleFullDocumentButton.click();
+      }
+    }
+
+    function setSelectMode(on) {
+      isSelectMode = on;
+      selectModeButton.textContent = `Select Range: ${on ? "On" : "Off"}`;
+      if (on) {
+        findingStartPoint = false;
+        showDocumentView();
+      }
+      updateEntryHint();
+    }
+
+    document.getElementById("start-from-beginning-button").addEventListener("click", () => {
+      if (!player) {
+        return;
+      }
+      findingStartPoint = false;
+      setSelectMode(false);
+      selectionStopWord = null;
+      requestSection(0, null);
+    });
+
+    document.getElementById("find-start-point-button").addEventListener("click", () => {
+      if (!player) {
+        return;
+      }
+      setSelectMode(false);
+      findingStartPoint = true;
+      showDocumentView();
+      updateEntryHint();
+      (isPagedDocument() ? pageInput : fullDocumentView).scrollIntoView({ block: "center" });
+      if (isPagedDocument()) {
+        pageInput.focus();
+      }
+    });
+
+    toggleFullDocumentButton.addEventListener("click", () => {
+      const isHidden = fullDocumentView.style.display === "none" || !fullDocumentView.style.display;
+      if (isHidden) {
+        fullDocumentView.style.display = "block";
+        updateFullDocumentView();
+        toggleFullDocumentButton.textContent = "Hide Full Document";
+      } else {
+        fullDocumentView.style.display = "none";
+        pageControls.style.display = "none";
+        toggleFullDocumentButton.textContent = "Show Full Document";
+      }
+    });
+
+    // Typing or pasting makes it pasted text; the .txt upload's own "input"
+    // event is synthetic (not trusted), so it doesn't reset the source type.
+    textInput.addEventListener("input", (event) => {
+      if (event.isTrusted) {
+        currentSourceType = "text";
+      }
+    });
+
+    textInput.addEventListener("input", () => {
+      if (fullDocumentView.style.display === "block") {
+        updateFullDocumentView();
+      } else {
+        updateEntryPoints();
+      }
+    });
+
+    // .txt upload: behaves exactly like pasting the file's text by hand.
+    const fileInput = document.getElementById("file-input");
+    const uploadError = document.getElementById("upload-error");
+
+    document.getElementById("upload-button").addEventListener("click", () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      // reset so choosing the same file again still fires "change"
+      fileInput.value = "";
+      if (!file) {
+        return;
+      }
+      uploadError.style.display = "none";
+
+      // the picker's filter can be overridden ("All Files"), so check again
+      if (!file.name.toLowerCase().endsWith(".txt")) {
+        uploadError.textContent = `"${file.name}" isn't a .txt file.`;
+        uploadError.style.display = "block";
+        return;
+      }
+
+      try {
+        textInput.value = await file.text();
+      } catch (error) {
+        console.error("Reading file failed:", error);
+        uploadError.textContent = `Couldn't read "${file.name}".`;
+        uploadError.style.display = "block";
+        return;
+      }
+      // programmatic .value doesn't fire "input"; fire it so everything that
+      // reacts to typing/pasting (e.g. the full document view) updates too
+      textInput.dispatchEvent(new Event("input", { bubbles: true }));
+      currentSourceType = "txt";
+    });
+
+    // --- PDF upload ----------------------------------------------------------
+    // The backend extracts and cleans the text (steps 24-26); the result is
+    // saved as one named document with its pages, equation markers and
+    // partitioned sections, none with audio yet. It then opens like any
+    // library document: the section at its position (the start) is prepared
+    // first and plays, the rest are prepared ahead as it plays.
+    const pdfInput = document.getElementById("pdf-input");
+    const uploadPdfButton = document.getElementById("upload-pdf-button");
+    const stripCitationsInput = document.getElementById("strip-citations-input");
+    const EXTRACT_URL = "http://127.0.0.1:5001/extract-pdf";
+    const MAX_PDF_BYTES = 100 * 1024 * 1024; // the server's limit too
+    let pendingPdf = null; // {fileName, extraction, citationsStripped}, waiting for a name
+
+    function showUploadError(message) {
+      uploadError.textContent = message;
+      uploadError.style.display = "block";
+    }
+
+    uploadPdfButton.addEventListener("click", () => pdfInput.click());
+
+    pdfInput.addEventListener("change", async () => {
+      const file = pdfInput.files[0];
+      pdfInput.value = "";
+      if (!file) {
+        return;
+      }
+      uploadError.style.display = "none";
+      namingPrompt.style.display = "none";
+      pendingPdf = null;
+      if (!file.name.toLowerCase().endsWith(".pdf")) {
+        showUploadError(`"${file.name}" isn't a PDF.`);
+        return;
+      }
+      if (file.size > MAX_PDF_BYTES) {
+        showUploadError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(0)} MB; PDFs up to 100 MB can be read.`);
+        return;
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+      form.append("strip_citations", stripCitationsInput.checked ? "1" : "0");
+      uploadPdfButton.disabled = true;
+      uploadPdfButton.textContent = "Reading PDF…";
+      const startedAt = performance.now();
+      let extraction;
+      try {
+        const response = await fetch(EXTRACT_URL, { method: "POST", body: form });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          // the server's own explanation: not a PDF, password-protected, damaged
+          showUploadError(response.status === 413
+            ? `"${file.name}" is too large; PDFs up to 100 MB can be read.`
+            : `Couldn't read "${file.name}": ${data.error || `the server responded with status ${response.status}`}.`);
+          return;
+        }
+        extraction = data;
+      } catch (error) {
+        console.error("PDF extraction failed:", error);
+        showUploadError("Couldn't reach the audio server to read the PDF (is it running?).");
+        return;
+      } finally {
+        uploadPdfButton.disabled = false;
+        uploadPdfButton.textContent = "Upload PDF";
+      }
+      preparationStats.extraction.push({
+        file: file.name, ms: Math.round(performance.now() - startedAt),
+        pages: extraction.page_count, words: extraction.words.length,
+      });
+      if (extraction.words.length === 0) {
+        // a scanned PDF: pages but no text layer, so nothing to read aloud
+        showUploadError(`"${file.name}" has no text to read aloud. It looks like a scanned PDF (images of pages without a text layer); run it through OCR first.`);
+        return;
+      }
+      pendingPdf = { fileName: file.name.replace(/\.pdf$/i, ""), extraction, citationsStripped: stripCitationsInput.checked };
+      showNamingPrompt(pendingPdf.fileName);
+    });
+
+    async function startPdfDocument(name, pdf) {
+      let id;
+      try {
+        id = await createPdfDocument(name, pdf.extraction, { citationsStripped: pdf.citationsStripped });
+      } catch (error) {
+        console.error("Saving the PDF failed:", error);
+        showUploadError("This PDF couldn't be saved to the library (storage may be full).");
+        return;
+      }
+      await reopenLibraryEntry(id);
+    }
+  </script>
+</body>
+</html>

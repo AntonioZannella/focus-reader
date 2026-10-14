@@ -1,0 +1,28 @@
+# Python
+backend/venv/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Generated audio is temporary (the server deletes it after an hour). The
+# folder itself is kept (.gitkeep), plus the two canonical test files the
+# test suite reads.
+backend/output/*
+!backend/output/.gitkeep
+!backend/output/test.mp3
+!backend/output/test_words.json
+
+# Local notes, tool configuration and old prototypes: not part of the project
+HANDOFF.md
+BUILD-PROMPTS.md
+.claude/
+/index.html
+.git-private-history/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

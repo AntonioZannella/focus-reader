@@ -1,0 +1,62 @@
+[
+  {
+    "word": "This",
+    "start_ms": 100.0,
+    "end_ms": 375.0
+  },
+  {
+    "word": "is",
+    "start_ms": 387.5,
+    "end_ms": 487.5
+  },
+  {
+    "word": "a",
+    "start_ms": 500.0,
+    "end_ms": 575.0
+  },
+  {
+    "word": "test",
+    "start_ms": 587.5,
+    "end_ms": 950.0
+  },
+  {
+    "word": "of",
+    "start_ms": 962.5,
+    "end_ms": 1025.0
+  },
+  {
+    "word": "the",
+    "start_ms": 1037.5,
+    "end_ms": 1125.0
+  },
+  {
+    "word": "focus",
+    "start_ms": 1137.5,
+    "end_ms": 1525.0
+  },
+  {
+    "word": "reader",
+    "start_ms": 1537.5,
+    "end_ms": 1837.5
+  },
+  {
+    "word": "text",
+    "start_ms": 1850.0,
+    "end_ms": 2187.5
+  },
+  {
+    "word": "to",
+    "start_ms": 2200.0,
+    "end_ms": 2262.5
+  },
+  {
+    "word": "speech",
+    "start_ms": 2275.0,
+    "end_ms": 2650.0
+  },
+  {
+    "word": "system",
+    "start_ms": 2662.5,
+    "end_ms": 3162.5
+  }
+]

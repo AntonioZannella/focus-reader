@@ -1,0 +1,3 @@
+# Test-only dependencies (the app itself needs requirements.txt only).
+-r requirements.txt
+pytest
