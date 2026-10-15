@@ -38,6 +38,9 @@
     --color-surface-hover: #f0f2f5;
     --color-border: #e3e5ea;
     --color-border-strong: #c4c8d2;
+    /* borders that are a control's only outline (buttons, text fields):
+       3:1 against the card and the page, as WCAG 1.4.11 asks */
+    --color-border-control: #858a96;
     --color-text: #21242c;
     --color-text-muted: #5b5e6b;
     --color-brand: #0a7d63;
@@ -66,6 +69,12 @@
     --color-stage-glow: #1d1d21;
     --color-stage-text-muted: #8b8b94;
     --color-stage-error: #ff6b6b;
+    /* banners on the stage use the dark-theme banner colors in both themes */
+    --color-stage-error-bg: #3a1418;
+    --color-stage-info: #7fb0ff;
+    --color-stage-info-bg: #0f2246;
+    --color-stage-track: rgba(255, 255, 255, 0.18);
+    --color-stage-pill-bg: rgba(255, 255, 255, 0.14);
     --color-chunk-text: #ffffff;
     --color-chunk-outline: #000000;
     /* Education mode colors: only drawn on the dark stage, same in both themes. */
@@ -107,6 +116,7 @@
       --color-surface-hover: #222226;
       --color-border: #2a2a2f;
       --color-border-strong: #3d3d44;
+      --color-border-control: #6b6b75;
       --color-text: #ededf0;
       --color-text-muted: #8b8b94;
       --color-brand: #14bf96;
@@ -137,6 +147,7 @@
     --color-surface-hover: #222226;
     --color-border: #2a2a2f;
     --color-border-strong: #3d3d44;
+    --color-border-control: #6b6b75;
     --color-text: #ededf0;
     --color-text-muted: #8b8b94;
     --color-brand: #14bf96;
@@ -303,6 +314,9 @@
   /* Player card: the stage on top, the controls below, like a video player. */
   .player-card {
     background-color: var(--color-surface);
+    /* the same hairline as the other cards; in dark theme it is also what
+       separates the stage from the page, which share a color */
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-card);
   }
@@ -345,10 +359,14 @@
     gap: 16px;
     padding: 32px 24px;
     background: radial-gradient(ellipse at center, var(--color-stage-glow) 0%, var(--color-stage-bg) 70%);
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    /* 1px less than the card, so it sits flush inside the card's border */
+    border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
     /* text on the stage stays light-on-dark in both themes */
     --color-text-muted: var(--color-stage-text-muted);
     --color-error: var(--color-stage-error);
+    --color-error-bg: var(--color-stage-error-bg);
+    --color-info: var(--color-stage-info);
+    --color-info-bg: var(--color-stage-info-bg);
   }
   #word-display {
     font-family: var(--font-chunk);
@@ -377,16 +395,30 @@
     color: var(--color-text-muted);
     font-size: 16px;
   }
+  /* spinning ring before "Generating audio…" (a pseudo-element, so the
+     code replacing the text never removes it) */
+  #loading-indicator::before {
+    content: "";
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    vertical-align: -2px;
+    border: 2px solid var(--color-brand-bright);
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: fr-spin 0.9s linear infinite;
+  }
+  @keyframes fr-spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes fr-pulse {
+    50% { opacity: 0.35; }
+  }
   /* Playback reached a section whose audio isn't ready: shown in focus mode
      too (it's in the stage), with its own Pause, instead of the paused hint. */
   #preparing-notice {
     display: none;
-    text-align: center;
-    color: var(--color-text-muted);
-    font-size: 16px;
-  }
-  #preparing-notice button {
-    margin-left: 8px;
   }
   body.focus-mode.audio-paused.waiting-for-section #focus-paused-hint {
     display: none;
@@ -394,16 +426,10 @@
   .library-offline-note {
     color: var(--color-text-muted);
     font-size: 13px;
-    margin-top: 10px;
+    margin-top: 12px;
   }
   #error-message {
     display: none;
-    text-align: center;
-    font-size: 16px;
-    color: var(--color-error);
-  }
-  #error-message button {
-    margin-left: 8px;
   }
 
   /* ---------- Focus mode (while playing) ---------- */
@@ -441,10 +467,36 @@
     left: 0;
     right: 0;
     bottom: 12%;
-    text-align: center;
-    color: var(--color-text-muted);
+    width: fit-content;
+    margin: 0 auto;
+    padding: 8px 16px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-stage-pill-bg);
+    color: var(--color-chunk-text);
     font-size: 14px;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
+  }
+  /* Reading progress: how far through the document the current word is.
+     Visual only (aria-hidden); dimmed in focus mode. */
+  .reading-progress {
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: 16px;
+    height: 6px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-stage-track);
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .reading-progress > div {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background-color: var(--color-brand-bright);
+  }
+  body.focus-mode .reading-progress {
+    opacity: 0.5;
   }
   body.focus-mode.audio-paused #focus-paused-hint {
     display: block;
@@ -480,7 +532,7 @@
     font-weight: 600;
     color: var(--color-text);
     background-color: var(--color-surface);
-    border: 1px solid var(--color-border-strong);
+    border: 1px solid var(--color-border-control);
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
@@ -565,7 +617,7 @@
   #back-button, #forward-button {
     min-height: 48px;
     padding: 0 20px;
-    border: 2px solid var(--color-border-strong);
+    border: 2px solid var(--color-border-control);
     background-color: var(--color-surface);
     color: var(--color-text);
   }
@@ -610,14 +662,14 @@
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 2px;
+    gap: 4px;
     padding: 4px;
     border-radius: var(--radius-pill);
     background-color: var(--color-background);
   }
   .segmented button {
     min-height: 44px;
-    padding: 0 14px;
+    padding: 0 16px;
     font-size: 14px;
     border-color: transparent;
     border-radius: var(--radius-pill);
@@ -662,6 +714,10 @@
     button:active {
       transform: none !important;
     }
+    /* the loading ring stops spinning and pulses slowly instead */
+    #loading-indicator::before {
+      animation: fr-pulse 2s ease-in-out infinite !important;
+    }
   }
 
   /* ---------- Panels ---------- */
@@ -687,7 +743,7 @@
     font-size: 16px;
     color: var(--color-text);
     background-color: var(--color-surface);
-    border: 2px solid var(--color-border-strong);
+    border: 2px solid var(--color-border-control);
     border-radius: var(--radius-md);
     padding: 0 16px;
     min-height: 48px;
@@ -761,23 +817,69 @@
   /* sits with the playback controls so it's on screen as soon as you pause */
   #storage-warning, #revision-notice {
     display: none;
-    max-width: 520px;
-    text-align: center;
-    padding: 10px 12px;
-    border: 1px solid var(--color-warning-border);
-    border-radius: var(--radius-sm);
-    background-color: var(--color-warning-bg);
-    color: var(--color-warning);
-    font-size: 14px;
-  }
-  #storage-warning button, #revision-notice button {
-    margin-left: 8px;
+    width: 100%;
   }
   #upload-error {
     display: none;
-    margin-top: 8px;
+    margin-top: 12px;
+  }
+
+  /* ---------- Banners ---------- */
+  /* Tinted background, 4px left border, icon and text in the strong color.
+     The icon is a pseudo-element so code that replaces a banner's text
+     keeps it. The code shows banners with display: block. */
+  #error-message, #upload-error, #storage-warning, #revision-notice, #preparing-notice {
+    position: relative;
+    max-width: 100%;
+    padding: 12px 16px 12px 44px;
+    border-left: 4px solid var(--banner-fg);
+    border-radius: var(--radius-md);
+    background-color: var(--banner-bg);
+    color: var(--banner-fg);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: left;
+  }
+  #error-message::before, #upload-error::before, #storage-warning::before,
+  #revision-notice::before, #preparing-notice::before {
+    content: "";
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    width: 20px;
+    height: 20px;
+    background-color: currentColor;
+    -webkit-mask: var(--banner-icon) center / contain no-repeat;
+    mask: var(--banner-icon) center / contain no-repeat;
+  }
+  #error-message, #upload-error {
+    --banner-fg: var(--color-error);
+    --banner-bg: var(--color-error-bg);
+    --banner-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 7.5v5.5M12 16.5v.01'/></svg>");
+  }
+  #storage-warning {
+    --banner-fg: var(--color-warning);
+    --banner-bg: var(--color-warning-bg);
+    --banner-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3.5L2.5 20h19z'/><path d='M12 10v4.5M12 17.5v.01'/></svg>");
+  }
+  #revision-notice, #preparing-notice {
+    --banner-fg: var(--color-info);
+    --banner-bg: var(--color-info-bg);
+    --banner-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 11v5.5M12 7.5v.01'/></svg>");
+  }
+  /* small secondary buttons inside banners */
+  #error-message button, #storage-warning button, #revision-notice button, #preparing-notice button {
+    /* the banner's strong color: the control border stays 3:1 on the tint */
+    border-color: var(--banner-fg);
+    margin: 4px 0 0 8px;
+    padding: 0 16px;
     font-size: 14px;
-    color: var(--color-error);
+    vertical-align: middle;
+  }
+  /* on the stage the banners sit centered over the caption area */
+  .stage #error-message, .stage #preparing-notice {
+    max-width: min(560px, 100%);
   }
 
   /* Naming prompt: an inline card in the brand tint */
@@ -891,9 +993,9 @@
   #search-results button {
     display: block;
     width: 100%;
-    min-height: 0;
+    min-height: 44px;
     margin: 0;
-    padding: 10px 12px;
+    padding: 12px;
     text-align: left;
     white-space: normal;
     font-weight: 400;
@@ -907,7 +1009,7 @@
     background-color: var(--color-surface-hover);
   }
   #search-results strong {
-    padding: 0 2px;
+    padding: 0 4px;
     border-radius: 3px;
     background-color: var(--color-warning-bg);
     /* the cream tint alone barely shows on white */
@@ -921,7 +1023,7 @@
   .equation-block {
     display: block;
     margin: 8px 0;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border-left: 3px solid var(--color-border);
     color: var(--color-text-muted);
     font-size: 15px;
@@ -977,27 +1079,37 @@
     flex-direction: column;
     gap: 12px;
   }
+  /* rows: title / "N% through · size" / progress bar / buttons */
   .library-entry {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 6px 8px;
+    gap: 4px 8px;
     padding: 16px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background-color: var(--color-surface);
   }
-  .library-entry-name {
-    grid-column: 1 / -1;
+  /* the title is a button (opens the document) drawn as plain text */
+  .library-entry .library-entry-name {
+    display: block;
+    flex: 1 0 100%;
     min-width: 0;
+    min-height: 44px;
+    margin: -8px 0 -4px;
+    padding: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    text-align: left;
     font-size: 16px;
     font-weight: 700;
+    border: 0;
+    background-color: transparent;
     cursor: pointer;
   }
-  .library-entry-name:hover {
+  .library-entry .library-entry-name:hover:not(:disabled) {
+    background-color: transparent;
     color: var(--color-brand);
     text-decoration: underline;
   }
@@ -1010,7 +1122,7 @@
     content: "· ";
   }
   .library-progress {
-    grid-column: 1 / -1;
+    flex: 1 0 100%;
     height: 6px;
     margin: 4px 0;
     border-radius: var(--radius-pill);
@@ -1020,11 +1132,12 @@
   .library-progress > div {
     height: 100%;
     border-radius: inherit;
-    background-color: var(--color-brand-bright);
+    /* brand, not brand-bright: bright mint on the light track is under 3:1 */
+    background-color: var(--color-brand);
   }
   .library-entry button {
     min-height: 44px;
-    padding: 0 14px;
+    padding: 0 16px;
     font-size: 14px;
   }
   /* Delete: a ghost button in the error color */
@@ -1037,13 +1150,16 @@
     background-color: var(--color-error-bg);
   }
   .library-entry input {
-    grid-column: 1 / -1;
-    width: 100%;
+    flex: 1 0 100%;
+  }
+  /* fills the rest of the metadata line, so the buttons start a new one */
+  .library-entry-size {
+    flex: 1 0 auto;
   }
   .library-empty {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     margin: 0;
     padding: 16px;
     border: 1px dashed var(--color-border-strong);
@@ -1078,15 +1194,16 @@
     <div id="word-display"></div>
     <div id="focus-paused-hint">Paused · press Space to resume</div>
     <div id="loading-indicator">Generating audio…</div>
-    <div id="preparing-notice">
+    <div id="preparing-notice" role="status">
       <span id="preparing-notice-text">Preparing the next section…</span>
       <button id="preparing-notice-pause">Pause</button>
       <button id="preparing-notice-cancel">Cancel</button>
     </div>
-    <div id="error-message">
+    <div id="error-message" role="alert">
       <span id="error-text">Something went wrong generating audio, try again</span>
       <button id="retry-button">Retry</button>
     </div>
+    <div class="reading-progress" aria-hidden="true" hidden><div></div></div>
   </section>
 
   <section class="controls">
@@ -1131,7 +1248,7 @@
     <div class="audio-row">
       <audio id="audio-player" controls></audio>
     </div>
-    <div id="revision-notice">
+    <div id="revision-notice" role="status">
       <span id="revision-notice-text"></span>
       <button id="revision-notice-dismiss">Dismiss</button>
     </div>
@@ -1154,7 +1271,7 @@
       <label class="citations-option"><input type="checkbox" id="strip-citations-input"> Leave out citations</label>
       <button id="toggle-full-document-button">Show Full Document</button>
     </div>
-    <div id="upload-error"></div>
+    <div id="upload-error" role="alert"></div>
     <div id="reading-entry-points">
       <span class="entry-label">Start reading:</span>
       <button id="start-from-beginning-button">Start from Beginning</button>
@@ -2005,7 +2122,8 @@
           row.appendChild(saveBtn);
           row.appendChild(cancelBtn);
         } else {
-          const nameSpan = document.createElement("span");
+          // a button, so the keyboard can open it too (Enter)
+          const nameSpan = document.createElement("button");
           nameSpan.textContent = record.name;
           nameSpan.className = "library-entry-name";
           nameSpan.addEventListener("click", () => reopenLibraryEntry(record.id));
@@ -3109,11 +3227,25 @@
     // Uses the same lookup as position saving: in the silence between words
     // (punctuation pauses) it keeps showing the most recently spoken word
     // rather than going blank, so a pause there still shows where you are.
+    // The stage's reading progress bar: the current word's place in the whole
+    // document (the same global index the library saves). Display only.
+    const readingProgress = document.querySelector(".reading-progress");
+    function updateReadingProgress(localIndex) {
+      readingProgress.hidden = !player || !player.words.length;
+      if (readingProgress.hidden) {
+        return;
+      }
+      const index = globalWordIndex(localIndex);
+      const fraction = index < 0 ? 0 : (index + 1) / player.words.length;
+      readingProgress.firstElementChild.style.width = `${Math.min(fraction, 1) * 100}%`;
+    }
+
     function updateWordDisplay() {
       if (equationOnScreen) {
         return; // an equation is shown instead
       }
       const currentIndex = getCurrentWordIndexForPosition();
+      updateReadingProgress(currentIndex);
 
       if (currentIndex === -1) {
         // In the silence before a section's first word, keep showing the

@@ -14,9 +14,13 @@ Focus Reader reads a document out loud and shows only the word or few words bein
 
 ## Screenshots and demo
 
-<!-- Screenshots and a short demo recording will be added here. -->
+A paused document in Education mode, with the library on the left. The page follows the system's light or dark setting, or the Theme button.
 
-*Coming soon.*
+| Light | Dark |
+| --- | --- |
+| ![Focus Reader in light theme: library sidebar, dark caption stage with a highlighted phrase, playback controls](docs/screenshots/light.jpg) | ![Focus Reader in dark theme: the same view](docs/screenshots/dark.jpg) |
+
+<!-- A short demo recording will be added here. -->
 
 ## How it works
 
