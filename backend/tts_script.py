@@ -5,7 +5,19 @@ import os
 import edge_tts
 
 TEXT = "This is a test of the focus reader text to speech system."
-VOICE = "en-US-AriaNeural"
+# Ava by default: Aria misreads some sentences ("math, or basic" came out
+# as "math, an basic" in a full paragraph, 2026-10-15).
+VOICE = "en-US-AvaNeural"
+# The voices the app offers (the Voice buttons); /synthesize refuses any other
+# name, so a request can't ask the service for something unexpected.
+VOICES = {
+    "en-US-AriaNeural": "Aria",
+    "en-US-AvaNeural": "Ava",
+    "en-US-JennyNeural": "Jenny",
+    "en-US-AndrewNeural": "Andrew",
+    "en-US-BrianNeural": "Brian",
+    "en-US-GuyNeural": "Guy",
+}
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "test.mp3")
 WORDS_PATH = os.path.join(OUTPUT_DIR, "test_words.json")

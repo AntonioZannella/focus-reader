@@ -732,8 +732,8 @@
   .segmented button:hover:not(:disabled) {
     background-color: var(--color-surface-hover);
   }
-  .speed-button.active, .chunk-button.active, .size-button.active,
-  .speed-button.active:hover, .chunk-button.active:hover, .size-button.active:hover {
+  .speed-button.active, .chunk-button.active, .size-button.active, .voice-button.active,
+  .speed-button.active:hover, .chunk-button.active:hover, .size-button.active:hover, .voice-button.active:hover {
     background-color: var(--color-surface);
     color: var(--color-brand);
     box-shadow: var(--shadow-card);
@@ -1303,6 +1303,17 @@
         <button aria-pressed="true" class="size-button active" data-scale="1">Medium</button>
         <button aria-pressed="false" class="size-button" data-scale="1.3">Large</button>
         <button aria-pressed="false" class="size-button" data-scale="1.6">Extra large</button>
+      </div>
+    </div>
+    <div id="voice-buttons" class="control-row">
+      <span class="control-label">Voice</span>
+      <div class="segmented">
+        <button aria-pressed="false" class="voice-button" data-voice="en-US-AriaNeural">Aria</button>
+        <button aria-pressed="true" class="voice-button active" data-voice="en-US-AvaNeural">Ava</button>
+        <button aria-pressed="false" class="voice-button" data-voice="en-US-JennyNeural">Jenny</button>
+        <button aria-pressed="false" class="voice-button" data-voice="en-US-AndrewNeural">Andrew</button>
+        <button aria-pressed="false" class="voice-button" data-voice="en-US-BrianNeural">Brian</button>
+        <button aria-pressed="false" class="voice-button" data-voice="en-US-GuyNeural">Guy</button>
       </div>
     </div>
     <div class="audio-row">
@@ -2297,7 +2308,7 @@
       const response = await fetch(BACKEND_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, voice: currentVoice }),
       });
 
       if (!response.ok) {
@@ -4082,6 +4093,82 @@
 
     // Caption text size: scales the caption (and an equation shown in its
     // place) from the default size.
+    // Voice: picks the voice for audio made from now on, and plays a short
+    // sample ("Hi, I'm Ava.") so the reader can hear it.
+    // ponytail: audio already prepared (and saved in the library) keeps the
+    // voice it was made with; re-make a document's audio on a voice change if
+    // readers find mixed voices confusing.
+    let currentVoice = "en-US-AvaNeural"; // the server's default too
+    const voiceSamples = new Map(); // voice -> Promise of a blob URL
+    const voiceSamplePlayer = new Audio();
+    function showVoice(voice) {
+      document.querySelectorAll(".voice-button").forEach((b) => {
+        const on = b.dataset.voice === voice;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", String(on));
+      });
+    }
+    // Fetches a voice's sample once (the server keeps it on disk after the
+    // first time), as a blob URL that plays instantly.
+    function loadVoiceSample(voice) {
+      if (!voiceSamples.has(voice)) {
+        const loading = fetch(`/voice-sample/${voice}`)
+          .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(`status ${response.status}`))))
+          .then((blob) => URL.createObjectURL(blob))
+          .catch((error) => {
+            voiceSamples.delete(voice); // try again on the next click
+            throw error;
+          });
+        voiceSamples.set(voice, loading);
+      }
+      return voiceSamples.get(voice);
+    }
+    async function playVoiceSample(button) {
+      const voice = button.dataset.voice;
+      try {
+        const url = await loadVoiceSample(voice);
+        if (currentVoice !== voice) {
+          return; // another voice was picked while this sample was loading
+        }
+        if (!audioPlayer.paused) {
+          togglePlayPause(); // the sample shouldn't talk over the reading
+        }
+        voiceSamplePlayer.src = url;
+        voiceSamplePlayer.playbackRate = audioPlayer.playbackRate;
+        await voiceSamplePlayer.play();
+      } catch (error) {
+        console.warn("The voice sample couldn't be played:", error);
+      }
+    }
+    // Load every sample in the background once the page is idle, one at a
+    // time, so the first click on any voice already plays at once.
+    setTimeout(async () => {
+      for (const button of document.querySelectorAll(".voice-button")) {
+        await loadVoiceSample(button.dataset.voice).catch(() => {});
+      }
+    }, 1500);
+    document.querySelectorAll(".voice-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        currentVoice = button.dataset.voice;
+        showVoice(currentVoice);
+        try {
+          localStorage.setItem("focusReaderVoice", currentVoice);
+        } catch (error) {
+          // storage unavailable: the choice just isn't remembered
+        }
+        playVoiceSample(button);
+      });
+    });
+    try {
+      const savedVoice = localStorage.getItem("focusReaderVoice");
+      if (document.querySelector(`.voice-button[data-voice="${savedVoice}"]`)) {
+        currentVoice = savedVoice;
+        showVoice(currentVoice);
+      }
+    } catch (error) {
+      // storage unavailable: Ava
+    }
+
     document.querySelectorAll(".size-button").forEach((button) => {
       button.addEventListener("click", () => {
         wordDisplay.style.setProperty("--caption-scale", button.dataset.scale);

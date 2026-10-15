@@ -7,7 +7,7 @@ import uuid
 from flask import Flask, jsonify, request, send_from_directory, url_for
 
 from pdf_cleanup import process_pdf
-from tts_script import OUTPUT_DIR, VOICE, synthesize_to_files
+from tts_script import OUTPUT_DIR, VOICE, VOICES, synthesize_to_files
 
 # 5001 locally (python backend/server.py); a host such as Hugging Face sets
 # PORT itself (7860 in the Docker image, where gunicorn binds it instead).
@@ -82,6 +82,9 @@ def synthesize():
     text = data.get("text")
     if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "JSON body must include a non-empty 'text' string"}), 400
+    voice = data.get("voice", VOICE)
+    if voice not in VOICES:
+        return jsonify({"error": f"Unknown voice {voice!r}"}), 400
     if len(text) > MAX_SYNTHESIS_CHARS:
         return jsonify({"error": f"This text is too long to read in one request ({len(text):,} characters; the limit is {MAX_SYNTHESIS_CHARS:,})."}), 413
 
@@ -96,7 +99,7 @@ def synthesize():
     # asyncio.run makes a new event loop for this call and closes it after, so
     # it's safe in gunicorn's worker threads (none of them has a loop running)
     try:
-        words = asyncio.run(synthesize_to_files(text, mp3_path, words_path, voice=VOICE))
+        words = asyncio.run(synthesize_to_files(text, mp3_path, words_path, voice=voice))
     except Exception as error:  # every retry failed: the speech service is down or refusing
         app.logger.error("Speech synthesis failed for %d characters: %s: %s", len(text), type(error).__name__, error)
         for path in (mp3_path, words_path):
@@ -140,6 +143,36 @@ def extract_pdf_route():
 @app.route("/output/<path:filename>")
 def output_file(filename):
     return send_from_directory(OUTPUT_DIR, filename)
+
+
+# Voice samples ("Hi, I'm Ava.") for the Voice buttons: made once per voice
+# and kept on disk (a subfolder, so the hourly cleanup of generated files
+# leaves them alone), then served straight away on every later request.
+
+@app.route("/voice-sample/<voice>")
+def voice_sample(voice):
+    if voice not in VOICES:
+        return jsonify({"error": f"Unknown voice {voice!r}"}), 404
+    sample_dir = os.path.join(OUTPUT_DIR, "voice-samples")
+    filename = f"{voice}.mp3"
+    if not os.path.isfile(os.path.join(sample_dir, filename)):
+        os.makedirs(sample_dir, exist_ok=True)
+        # made under a unique name and moved into place, so two first requests
+        # at once never serve a half-written file
+        partial = os.path.join(sample_dir, f"{uuid.uuid4().hex}.partial")
+        try:
+            asyncio.run(synthesize_to_files(f"Hi, I'm {VOICES[voice]}.", partial, partial + ".json", voice=voice))
+            os.replace(partial, os.path.join(sample_dir, filename))
+        except Exception as error:
+            app.logger.error("Voice sample for %s failed: %s: %s", voice, type(error).__name__, error)
+            return jsonify({"error": "The speech service didn't respond."}), 502
+        finally:
+            for leftover in (partial, partial + ".json"):
+                if os.path.exists(leftover):
+                    os.remove(leftover)
+    response = send_from_directory(sample_dir, filename)
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
 
 
 @app.route("/")
