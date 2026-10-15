@@ -277,7 +277,13 @@
   async function holdAtEquation() {
     await reopenLibraryEntry(pdfId);
     playFromWord(15);
-    await until(() => !!equationHold, 10000);
+    try {
+      await until(() => !!equationHold, 10000);
+    } catch (error) {
+      // seen once in ~20 runs: report the player's state so the cause shows
+      throw new Error(`${error.message}; state: word ${word()}, paused ${audioPlayer.paused}, loading ${sectionLoading}, `
+        + `waiting ${!!waitingFor}, armedFrom ${equationArmFrom}, fired [${[...firedEquations]}], onScreen ${equationOnScreen}`);
+    }
   }
 
   await test("an equation pauses, shows its text and resumes after 5 s", async () => {

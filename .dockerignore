@@ -1,0 +1,17 @@
+# Not needed in the image (and some of it is private or large)
+backend/venv
+backend/output/*
+**/__pycache__
+.git
+.git-private-history
+.pytest_cache
+tests/
+.DS_Store
+**/.DS_Store
+HANDOFF.md
+BUILD-PROMPTS.md
+.claude/
+# the old prototype page at the project root (the app is frontend/index.html)
+/index.html
+*.tmp
+*.tmp.*

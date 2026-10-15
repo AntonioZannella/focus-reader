@@ -634,7 +634,7 @@
 
   <script src="alignment.js"></script>
   <script>
-    const BACKEND_URL = "http://127.0.0.1:5001/synthesize";
+    const BACKEND_URL = "/synthesize";
     const audioPlayer = document.getElementById("audio-player");
     const playPauseButton = document.getElementById("play-pause-button");
     const wordDisplay = document.getElementById("word-display");
@@ -1490,10 +1490,21 @@
       });
 
       if (!response.ok) {
-        throw new Error(`Server responded with status ${response.status}`);
+        // keep the server's own explanation (e.g. a 413 "too long") to show
+        const body = await response.json().catch(() => ({}));
+        const error = new Error(body.error || `Server responded with status ${response.status}`);
+        error.status = response.status;
+        throw error;
       }
 
       return response.json();
+    }
+
+    // What to tell the reader when generating audio failed: the server's
+    // reason for a request it refuses as too large, otherwise a general retry
+    // message.
+    function synthesisErrorText(error) {
+      return error && error.status === 413 ? error.message : SYNTHESIS_ERROR_TEXT;
     }
 
     // --- The player: one active document, played section by section --------
@@ -2018,7 +2029,7 @@
           return;
         }
         console.error("Synthesis failed:", error);
-        showLoadError(SYNTHESIS_ERROR_TEXT, retryLastAction);
+        showLoadError(synthesisErrorText(error), retryLastAction);
       }
     }
 
@@ -2116,7 +2127,7 @@
           return;
         }
         console.error("Reopen failed:", error);
-        showLoadError(SYNTHESIS_ERROR_TEXT, retryLastAction);
+        showLoadError(synthesisErrorText(error), retryLastAction);
       }
     }
 
@@ -2307,7 +2318,9 @@
       showLoadError(
         unreachable
           ? "This part of the document isn't saved for offline listening, and the audio server couldn't be reached to generate it (are you offline?). Only saved parts play without a connection."
-          : "Something went wrong preparing this part of the document's audio.",
+          : error && error.status === 413
+            ? error.message
+            : "Something went wrong preparing this part of the document's audio.",
         () => requestSection(index, waitingFor ? waitingFor.word : null, { continuing: !waitingFor || waitingFor.word === null })
       );
     }
@@ -3675,8 +3688,9 @@
     const pdfInput = document.getElementById("pdf-input");
     const uploadPdfButton = document.getElementById("upload-pdf-button");
     const stripCitationsInput = document.getElementById("strip-citations-input");
-    const EXTRACT_URL = "http://127.0.0.1:5001/extract-pdf";
-    const MAX_PDF_BYTES = 100 * 1024 * 1024; // the server's limit too
+    const EXTRACT_URL = "/extract-pdf";
+    const MAX_PDF_BYTES = 25 * 1024 * 1024; // must equal the server's MAX_UPLOAD_BYTES
+    const MAX_PDF_MB = MAX_PDF_BYTES / (1024 * 1024);
     let pendingPdf = null; // {fileName, extraction, citationsStripped}, waiting for a name
 
     function showUploadError(message) {
@@ -3700,7 +3714,7 @@
         return;
       }
       if (file.size > MAX_PDF_BYTES) {
-        showUploadError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(0)} MB; PDFs up to 100 MB can be read.`);
+        showUploadError(`"${file.name}" is ${(file.size / (1024 * 1024)).toFixed(0)} MB; PDFs up to ${MAX_PDF_MB} MB can be read.`);
         return;
       }
 
@@ -3717,7 +3731,7 @@
         if (!response.ok) {
           // the server's own explanation: not a PDF, password-protected, damaged
           showUploadError(response.status === 413
-            ? `"${file.name}" is too large; PDFs up to 100 MB can be read.`
+            ? `"${file.name}" is too large; PDFs up to ${MAX_PDF_MB} MB can be read.`
             : `Couldn't read "${file.name}": ${data.error || `the server responded with status ${response.status}`}.`);
           return;
         }

@@ -9,7 +9,15 @@ from flask import Flask, jsonify, request, send_from_directory, url_for
 from pdf_cleanup import process_pdf
 from tts_script import OUTPUT_DIR, VOICE, synthesize_to_files
 
-PORT = 5001
+# 5001 locally (python backend/server.py); a host such as Hugging Face sets
+# PORT itself (7860 in the Docker image, where gunicorn binds it instead).
+PORT = int(os.environ.get("PORT", "5001"))
+# The page sends sections of at most ~600 words (a few thousand characters),
+# so anything longer than this isn't the app and is refused: the site is
+# public and each request costs a call to the speech service.
+MAX_SYNTHESIS_CHARS = 10_000
+# Largest PDF accepted; the page's MAX_PDF_BYTES must be the same.
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 # Generated audio is only needed until the browser has downloaded it (the
 # browser keeps its own copy with each library entry), so the output folder is
@@ -19,10 +27,20 @@ OUTPUT_MAX_AGE_SECONDS = 60 * 60
 # test.mp3 / test_words.json and anything else placed there are left alone.
 GENERATED_FILE_PATTERN = re.compile(r"^[0-9a-f]{32}(\.mp3|_words\.json)$")
 PROTECTED_FILES = {"test.mp3", "test_words.json"}
+# The page and the files it loads (alignment.js, words.txt...) are served from
+# frontend/, found from this file's location so the server works whichever
+# folder it's started from. send_from_directory refuses any path that would
+# leave that folder.
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 
 app = Flask(__name__)
-# Uploaded PDFs are read in memory; larger requests get a 413 from Flask.
-app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+# Uploaded PDFs are read in memory; larger requests get a 413 (as JSON, below).
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+
+
+@app.errorhandler(413)
+def request_too_large(error):
+    return jsonify({"error": f"The upload is too large; the limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB."}), 413
 
 
 def cleanup_old_outputs(max_age_seconds=OUTPUT_MAX_AGE_SECONDS):
@@ -64,6 +82,8 @@ def synthesize():
     text = data.get("text")
     if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "JSON body must include a non-empty 'text' string"}), 400
+    if len(text) > MAX_SYNTHESIS_CHARS:
+        return jsonify({"error": f"This text is too long to read in one request ({len(text):,} characters; the limit is {MAX_SYNTHESIS_CHARS:,})."}), 413
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     cleanup_old_outputs()
@@ -73,9 +93,13 @@ def synthesize():
     mp3_path = os.path.join(OUTPUT_DIR, mp3_filename)
     words_path = os.path.join(OUTPUT_DIR, words_filename)
 
+    # asyncio.run makes a new event loop for this call and closes it after, so
+    # it's safe in gunicorn's worker threads (none of them has a loop running)
     words = asyncio.run(synthesize_to_files(text, mp3_path, words_path, voice=VOICE))
 
-    audio_url = url_for("output_file", filename=mp3_filename, _external=True)
+    # a relative link ("/output/<id>.mp3"): an absolute http:// one would be
+    # blocked as mixed content when the site is served over https by a proxy
+    audio_url = url_for("output_file", filename=mp3_filename)
     return jsonify({"audio_url": audio_url, "words": words})
 
 
@@ -107,6 +131,16 @@ def extract_pdf_route():
 @app.route("/output/<path:filename>")
 def output_file(filename):
     return send_from_directory(OUTPUT_DIR, filename)
+
+
+@app.route("/")
+def index():
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
+@app.route("/<path:filename>")
+def frontend_file(filename):
+    return send_from_directory(FRONTEND_DIR, filename)
 
 
 if __name__ == "__main__":
