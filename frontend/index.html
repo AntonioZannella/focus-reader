@@ -4,36 +4,160 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Focus Reader</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
+<script>
+  // Applies the saved theme (System when none) before the CSS paints, so a
+  // reload never flashes the wrong theme. Blocked storage just means System.
+  try {
+    const savedTheme = localStorage.getItem("focusReaderTheme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      document.documentElement.dataset.theme = savedTheme;
+    }
+  } catch (error) {}
+</script>
 <style>
+  @font-face {
+    font-family: "Nunito";
+    src: url("fonts/nunito-latin-wght.woff2") format("woff2");
+    font-weight: 200 1000;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "Montserrat";
+    src: url("fonts/montserrat-latin-wght.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  /* Light theme is the default; dark values are below. */
   :root {
-    color-scheme: dark;
-    --color-background: #0a0a0b;
+    color-scheme: light;
+    --color-background: #f7f8fa;
+    --color-surface: #ffffff;
+    --color-surface-hover: #f0f2f5;
+    --color-border: #e3e5ea;
+    --color-border-strong: #c4c8d2;
+    --color-text: #21242c;
+    --color-text-muted: #5b5e6b;
+    --color-brand: #0a7d63;
+    --color-brand-hover: #06664f;
+    --color-brand-bright: #14bf96;
+    --color-brand-tint: #e3f9f1;
+    --color-on-brand: #ffffff;
+    --color-active-background: var(--color-brand-tint);
+    --color-active-text: #06664f;
+    /* solid brand: the 45% mint ring was 1.5:1 on the page, under 3:1 */
+    --color-focus: #0a7d63;
+    /* darkened from #d23a48 to pass 4.5:1 on --color-error-bg and the page */
+    --color-error: #c0303e;
+    --color-error-bg: #fdebed;
+    --color-warning: #9a5b00;
+    --color-warning-bg: #fef9e9;
+    --color-warning-border: #f4cf3e;
+    /* darkened from #1865f2 to pass 4.5:1 on --color-info-bg */
+    --color-info: #1458d6;
+    --color-info-bg: #e6efff;
+    --color-success: #0a7d63;
+    --color-success-bg: #e3f9f1;
+
+    /* The stage (captions) is dark in both themes. */
+    --color-stage-bg: #0a0a0b;
     --color-stage-glow: #1d1d21;
-    --color-surface: #161618;
-    --color-surface-hover: #222226;
-    --color-border: #2a2a2f;
-    --color-text: #ededf0;
-    --color-text-muted: #8b8b94;
-    --color-active-background: #ededf0;
-    --color-active-text: #0a0a0b;
-    --color-focus: #6ea8fe;
-    --color-error: #ff6b6b;
-    --color-warning: #f0b429;
+    --color-stage-text-muted: #8b8b94;
+    --color-stage-error: #ff6b6b;
     --color-chunk-text: #ffffff;
     --color-chunk-outline: #000000;
-    --color-range-start: #2f9e44;
-    --color-range-end: #e03131;
-    --color-range-between: #4d4312;
-    --color-range-text: #ffffff;
+    /* Education mode colors: only drawn on the dark stage, same in both themes. */
     --color-short-vowel: #ff6fb5;
     --color-welded: #4ade80;
     --color-affix: #facc15;
+    /* Selection range: drawn in the full document view (a surface), so these
+       follow the theme. Light: white text passes 4.5:1 on start/end, dark
+       text 4.7:1 on between, and each fill is 3:1+ against white. Dark keeps
+       start/end and uses a deeper between, 3:1+ against its surface. */
+    --color-range-start: #237a36;
+    --color-range-end: #c92a2a;
+    --color-range-between: #b8860b;
+    --color-range-text: #ffffff;
 
-    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --shadow-card: 0 2px 8px rgba(33,36,44,.06);
+    --shadow-hover: 0 8px 24px rgba(33,36,44,.12);
+    --shadow-modal: 0 16px 48px rgba(33,36,44,.20);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-pill: 9999px;
+    --ease: cubic-bezier(.4,0,.2,1);
+    --t-fast: 150ms;
+    --t: 250ms;
+
+    --font-ui: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-chunk: "Montserrat", "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* Dark theme: when the system asks for it (unless Light is chosen), or when
+     Dark is chosen. Keep the two blocks identical. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --color-background: #0a0a0b;
+      --color-surface: #161618;
+      --color-surface-hover: #222226;
+      --color-border: #2a2a2f;
+      --color-border-strong: #3d3d44;
+      --color-text: #ededf0;
+      --color-text-muted: #8b8b94;
+      --color-brand: #14bf96;
+      --color-brand-hover: #2dd4a7;
+      --color-on-brand: #0a0a0b;
+      --color-brand-tint: #0f3b30;
+      --color-active-text: #6ee7c4;
+      --color-focus: rgba(20, 191, 150, 0.6);
+      --color-error: #ff6b6b;
+      --color-error-bg: #3a1418;
+      --color-warning: #f0b429;
+      --color-warning-bg: #2e2208;
+      --color-warning-border: #6b4f0e;
+      --color-info: #7fb0ff;
+      --color-info-bg: #0f2246;
+      --color-success: #4fd8b0;
+      --color-success-bg: #0d3328;
+      --color-range-between: #7a6012;
+      --shadow-card: 0 2px 8px rgba(0,0,0,.4);
+      --shadow-hover: 0 8px 24px rgba(0,0,0,.5);
+      --shadow-modal: 0 16px 48px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-background: #0a0a0b;
+    --color-surface: #161618;
+    --color-surface-hover: #222226;
+    --color-border: #2a2a2f;
+    --color-border-strong: #3d3d44;
+    --color-text: #ededf0;
+    --color-text-muted: #8b8b94;
+    --color-brand: #14bf96;
+    --color-brand-hover: #2dd4a7;
+    --color-on-brand: #0a0a0b;
+    --color-brand-tint: #0f3b30;
+    --color-active-text: #6ee7c4;
+    --color-focus: rgba(20, 191, 150, 0.6);
+    --color-error: #ff6b6b;
+    --color-error-bg: #3a1418;
+    --color-warning: #f0b429;
+    --color-warning-bg: #2e2208;
+    --color-warning-border: #6b4f0e;
+    --color-info: #7fb0ff;
+    --color-info-bg: #0f2246;
+    --color-success: #4fd8b0;
+    --color-success-bg: #0d3328;
+    --color-range-between: #7a6012;
+    --shadow-card: 0 2px 8px rgba(0,0,0,.4);
+    --shadow-hover: 0 8px 24px rgba(0,0,0,.5);
+    --shadow-modal: 0 16px 48px rgba(0,0,0,.6);
   }
 
   * {
@@ -44,8 +168,32 @@
     background-color: var(--color-background);
     color: var(--color-text);
     font-family: var(--font-ui);
-    font-size: 15px;
-    line-height: 1.5;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  h1, h2, h3 {
+    font-weight: 700;
+  }
+  #page-counter, .speed-button, #page-input, #audio-player {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Small, out of the way; hidden with the rest of the chrome in focus mode. */
+  #theme-toggle {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    padding: 5px 11px;
+    font-size: 13px;
+  }
+  @media (max-width: 599px) {
+    #theme-toggle {
+      position: static;
+      display: block;
+      margin: 12px auto 0;
+    }
+  }
+  body.focus-mode #theme-toggle {
+    display: none;
   }
   .app {
     max-width: 760px;
@@ -85,6 +233,11 @@
     outline-offset: 0.03em;
     border-radius: 0.1em;
   }
+  /* ponytail: a boxed word can't wrap mid-word, so one longer than the
+     stage overflows; only plausible at Extra large on a phone */
+  .caption-word {
+    white-space: nowrap;
+  }
   /* Anything marked education-only appears in Education mode only. */
   body:not(.mode-education) .education-only {
     display: none !important;
@@ -101,7 +254,11 @@
     justify-content: center;
     gap: 16px;
     padding: 32px 0;
-    background: radial-gradient(ellipse at center, var(--color-stage-glow) 0%, var(--color-background) 70%);
+    background: radial-gradient(ellipse at center, var(--color-stage-glow) 0%, var(--color-stage-bg) 70%);
+    border-radius: var(--radius-lg);
+    /* text on the stage stays light-on-dark in both themes */
+    --color-text-muted: var(--color-stage-text-muted);
+    --color-error: var(--color-stage-error);
   }
   #word-display {
     font-family: var(--font-chunk);
@@ -159,6 +316,7 @@
   /* ---------- Focus mode (while playing) ---------- */
   body.focus-mode {
     overflow: hidden;
+    background-color: var(--color-stage-bg);
   }
   body.focus-mode .controls,
   body.focus-mode .panel,
@@ -212,23 +370,26 @@
     color: var(--color-text);
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 7px 14px;
     cursor: pointer;
-    transition: background-color 120ms, color 120ms, border-color 120ms;
+    transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
   }
   button:hover:not(:disabled) {
     background-color: var(--color-surface-hover);
   }
-  /* Filled (light) buttons keep their fill on hover; the generic hover above
-     would otherwise put their dark text on a dark background. */
+  /* Selected pills and brand buttons keep their fill on hover; the generic
+     hover above would otherwise replace it. */
   .speed-button.active:hover, .chunk-button.active:hover, .size-button.active:hover,
-  .mode-tab[aria-selected="true"]:hover, #play-pause-button:hover, #start-button:hover {
+  .mode-tab[aria-selected="true"]:hover {
     background-color: var(--color-active-background);
-    opacity: 0.88;
+  }
+  #play-pause-button:hover:not(:disabled), #start-button:hover:not(:disabled) {
+    background-color: var(--color-brand-hover);
+    border-color: var(--color-brand-hover);
   }
   button:focus-visible, input:focus-visible, textarea:focus-visible {
-    outline: 2px solid var(--color-focus);
+    outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
   button:disabled {
@@ -236,9 +397,9 @@
     cursor: default;
   }
   .speed-button.active, .chunk-button.active, .size-button.active {
-    font-weight: 600;
+    font-weight: 700;
     background-color: var(--color-active-background);
-    border-color: var(--color-active-background);
+    border-color: var(--color-active-text);
     color: var(--color-active-text);
   }
   .controls {
@@ -257,10 +418,10 @@
     min-width: 96px;
     padding: 10px 22px;
     font-size: 16px;
-    font-weight: 600;
-    background-color: var(--color-active-background);
-    border-color: var(--color-active-background);
-    color: var(--color-active-text);
+    font-weight: 700;
+    background-color: var(--color-brand);
+    border-color: var(--color-brand);
+    color: var(--color-on-brand);
   }
   .control-row {
     display: flex;
@@ -295,7 +456,7 @@
     margin: 0 0 12px;
     color: var(--color-text-muted);
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -324,10 +485,10 @@
     margin-top: 12px;
   }
   #start-button {
-    font-weight: 600;
-    background-color: var(--color-active-background);
-    border-color: var(--color-active-background);
-    color: var(--color-active-text);
+    font-weight: 700;
+    background-color: var(--color-brand);
+    border-color: var(--color-brand);
+    color: var(--color-on-brand);
   }
   /* sits with the playback controls so it's on screen as soon as you pause */
   #storage-warning, #revision-notice {
@@ -335,8 +496,9 @@
     max-width: 520px;
     text-align: center;
     padding: 10px 12px;
-    border: 1px solid var(--color-warning);
-    border-radius: 10px;
+    border: 1px solid var(--color-warning-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-warning-bg);
     color: var(--color-warning);
     font-size: 14px;
   }
@@ -518,6 +680,7 @@
 </head>
 <body>
 <main class="app">
+  <button id="theme-toggle" type="button" aria-label="Theme: System" title="Theme: System">Theme</button>
   <nav class="mode-tabs" role="tablist" aria-label="Mode">
     <button class="mode-tab" role="tab" data-mode="normal" aria-selected="true">Normal</button>
     <button class="mode-tab" role="tab" data-mode="education" aria-selected="false">Education</button>
@@ -2599,6 +2762,14 @@
             i = j;
           }
         };
+        // A word with a box is kept on one line: the box (inline-block)
+        // would otherwise let the line break inside the word ("jump / ed").
+        let target = wordDisplay;
+        if (affix.some((n) => n >= 0)) {
+          target = document.createElement("span");
+          target.className = "caption-word";
+          wordDisplay.append(target);
+        }
         let i = 0;
         while (i < part.length) {
           let j = i;
@@ -2607,9 +2778,9 @@
             const box = document.createElement("span");
             box.className = "affix";
             appendColored(box, i, j);
-            wordDisplay.append(box);
+            target.append(box);
           } else {
-            appendColored(wordDisplay, i, j);
+            appendColored(target, i, j);
           }
           i = j;
         }
@@ -3147,6 +3318,37 @@
     } catch (error) {
       setMode("normal");
     }
+
+    // Theme: System -> Light -> Dark. System removes data-theme so the
+    // prefers-color-scheme rules decide; the head script restores the choice.
+    const themeToggle = document.getElementById("theme-toggle");
+    const THEME_ORDER = ["system", "light", "dark"];
+    const THEME_NAMES = { system: "System", light: "Light", dark: "Dark" };
+    function showTheme(theme) {
+      const label = `Theme: ${THEME_NAMES[theme]}`;
+      themeToggle.setAttribute("aria-label", label);
+      themeToggle.title = label;
+    }
+    themeToggle.addEventListener("click", () => {
+      const current = document.documentElement.dataset.theme || "system";
+      const theme = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
+      if (theme === "system") {
+        delete document.documentElement.dataset.theme;
+      } else {
+        document.documentElement.dataset.theme = theme;
+      }
+      showTheme(theme);
+      try {
+        if (theme === "system") {
+          localStorage.removeItem("focusReaderTheme");
+        } else {
+          localStorage.setItem("focusReaderTheme", theme);
+        }
+      } catch (error) {
+        // storage unavailable: the theme applies now but isn't remembered
+      }
+    });
+    showTheme(document.documentElement.dataset.theme || "system");
 
     // Caption text size: scales the caption (and an equation shown in its
     // place) from the default size.

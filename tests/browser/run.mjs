@@ -35,7 +35,8 @@ async function launchChrome(profile) {
   const chrome = spawn(CHROME, [
     "--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profile}`,
     "--autoplay-policy=no-user-gesture-required", "--no-first-run", "--no-default-browser-check",
-    "--mute-audio", "about:blank",
+    // fake audio output: playback never depends on this machine's sound device
+    "--mute-audio", "--disable-audio-output", "about:blank",
   ], { stdio: "ignore" });
   const portFile = join(profile, "DevToolsActivePort");
   for (let i = 0; i < 200 && !existsSync(portFile); i++) await sleep(50);
