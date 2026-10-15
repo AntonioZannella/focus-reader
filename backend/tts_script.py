@@ -14,8 +14,27 @@ WORDS_PATH = os.path.join(OUTPUT_DIR, "test_words.json")
 TICKS_PER_MS = 10000
 
 
+# edge-tts talks to an unofficial Microsoft endpoint that now and then drops a
+# connection or sends no audio; a short retry hides most of those blips.
+SYNTHESIS_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 1.0
+
+
 async def synthesize_to_files(text, mp3_path, words_path, voice=VOICE):
-    """Run edge-tts on `text`, writing the mp3 and word-boundary timestamps."""
+    """Run edge-tts on `text`, writing the mp3 and word-boundary timestamps.
+    Retries a failed attempt (each attempt starts the files over); the last
+    failure is raised."""
+    for attempt in range(1, SYNTHESIS_ATTEMPTS + 1):
+        try:
+            return await _synthesize_once(text, mp3_path, words_path, voice)
+        except Exception as error:  # network errors, NoAudioReceived, ...
+            if attempt == SYNTHESIS_ATTEMPTS:
+                raise
+            print(f"edge-tts attempt {attempt} failed ({type(error).__name__}: {error}); retrying", flush=True)
+            await asyncio.sleep(RETRY_DELAY_SECONDS * attempt)
+
+
+async def _synthesize_once(text, mp3_path, words_path, voice):
     communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary")
 
     words = []

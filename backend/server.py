@@ -95,7 +95,16 @@ def synthesize():
 
     # asyncio.run makes a new event loop for this call and closes it after, so
     # it's safe in gunicorn's worker threads (none of them has a loop running)
-    words = asyncio.run(synthesize_to_files(text, mp3_path, words_path, voice=VOICE))
+    try:
+        words = asyncio.run(synthesize_to_files(text, mp3_path, words_path, voice=VOICE))
+    except Exception as error:  # every retry failed: the speech service is down or refusing
+        app.logger.error("Speech synthesis failed for %d characters: %s: %s", len(text), type(error).__name__, error)
+        for path in (mp3_path, words_path):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        return jsonify({"error": "The speech service didn't respond. Check your internet connection and try again."}), 502
 
     # a relative link ("/output/<id>.mp3"): an absolute http:// one would be
     # blocked as mixed content when the site is served over https by a proxy

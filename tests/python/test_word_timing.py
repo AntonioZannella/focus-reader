@@ -68,10 +68,10 @@ def test_live_synthesize_endpoint(tmp_path, monkeypatch):
     monkeypatch.setitem(server.app.config, "TESTING", True)  # errors raise, not 500
     client = server.app.test_client()
     text = "Captions follow each word as it is spoken aloud."
-    try:
-        response = client.post("/synthesize", json={"text": text})
-    except Exception as error:  # the service couldn't be reached
-        pytest.skip(f"speech service unreachable: {error}")
+    monkeypatch.setattr(tts_script, "RETRY_DELAY_SECONDS", 0)
+    response = client.post("/synthesize", json={"text": text})
+    if response.status_code == 502:  # every attempt failed: service unreachable
+        pytest.skip(f"speech service unreachable: {response.get_json()['error']}")
     assert response.status_code == 200
     body = response.get_json()
     mp3 = os.path.join(tmp_path, body["audio_url"].rsplit("/", 1)[-1])
