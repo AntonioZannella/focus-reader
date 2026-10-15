@@ -371,8 +371,12 @@
   #word-display {
     font-family: var(--font-chunk);
     font-weight: 900;
-    /* --caption-scale: the Size buttons */
-    font-size: calc(clamp(40px, 9.4vw, 88px) * var(--caption-scale, 1));
+    /* --caption-scale: the Size buttons; --caption-fit: set by fitCaption()
+       to shrink a chunk that wouldn't fit on the stage */
+    font-size: calc(clamp(40px, 9.4vw, 88px) * var(--caption-scale, 1) * var(--caption-fit, 1));
+    width: 100%;
+    /* room for the outline stroke, which is drawn outside the glyphs */
+    padding-inline: 0.15em;
     line-height: 1.1;
     letter-spacing: -0.01em;
     text-align: center;
@@ -384,9 +388,9 @@
     paint-order: stroke fill;
     text-shadow: 0.03em 0.05em 0 var(--color-chunk-outline);
     min-height: 1.1em;
-    overflow-wrap: anywhere;
-    /* a long chunk at Extra large spills past the stage over the controls;
-       it must never catch their clicks */
+    /* never break inside a word ("underest / imated"); fitCaption() shrinks
+       the text instead when a word is wider than the stage */
+    overflow-wrap: normal;
     pointer-events: none;
   }
   #loading-indicator {
@@ -507,7 +511,7 @@
   #word-display.equation {
     font-family: inherit;
     font-weight: 600;
-    font-size: calc(clamp(20px, 3.6vw, 34px) * var(--caption-scale, 1));
+    font-size: calc(clamp(20px, 3.6vw, 34px) * var(--caption-scale, 1) * var(--caption-fit, 1));
     line-height: 1.4;
     -webkit-text-stroke: 0;
     text-shadow: none;
@@ -1328,6 +1332,26 @@
       playPauseButton.innerHTML = PLAY_PAUSE_ICONS[label] + label;
     }
     const wordDisplay = document.getElementById("word-display");
+
+    // Shrinks the caption until it fits on the stage: no word wider than the
+    // stage, and the whole chunk at most 80% of its height. Runs on every
+    // caption change (all the code that writes the caption goes through the
+    // observer below), on window resize and when a Size button is pressed.
+    const captionStage = wordDisplay.closest(".stage");
+    function fitCaption() {
+      let fit = 1;
+      wordDisplay.style.setProperty("--caption-fit", fit);
+      const maxHeight = captionStage.clientHeight * 0.8;
+      if (!maxHeight || !wordDisplay.clientWidth) {
+        return; // stage not laid out (hidden); fit again when it changes
+      }
+      while (fit > 0.3 && (wordDisplay.scrollWidth > wordDisplay.clientWidth || wordDisplay.offsetHeight > maxHeight)) {
+        fit *= 0.9;
+        wordDisplay.style.setProperty("--caption-fit", fit);
+      }
+    }
+    new MutationObserver(fitCaption).observe(wordDisplay, { childList: true, characterData: true, subtree: true });
+    window.addEventListener("resize", fitCaption);
     const loadingIndicator = document.getElementById("loading-indicator");
     const errorMessage = document.getElementById("error-message");
     let words = [];
@@ -3432,6 +3456,7 @@
       if (!player && !audioPlayer.src) {
         return;
       }
+      focusDismissed = false;
       if (equationHold) {
         wantsToPlay = false;
         pauseEquationHold();
@@ -3763,11 +3788,17 @@
 
     // Focus mode: while playing, only the chunk display is shown. Exits on a
     // user-initiated pause or when playback reaches the end of the audio.
+    // Set by Esc: playback carries on with the full page showing, and the
+    // next section starting mustn't bring focus mode back. Cleared when the
+    // reader presses Play/Pause.
+    let focusDismissed = false;
+
     function enterFocusMode() {
-      if (document.body.classList.contains("focus-mode")) {
+      if (focusDismissed || document.body.classList.contains("focus-mode")) {
         return;
       }
       document.body.classList.add("focus-mode");
+      fitCaption(); // the stage just grew to the full window
     }
 
     function exitFocusMode() {
@@ -3775,6 +3806,7 @@
         return;
       }
       document.body.classList.remove("focus-mode");
+      fitCaption(); // the stage just shrank back
       // land on the chunk display and playback controls, not wherever the
       // page happened to be scrolled before playback started
       window.scrollTo(0, 0);
@@ -3809,6 +3841,15 @@
     }
 
     const SHORTCUT_KEYS = [" ", "ArrowLeft", "ArrowRight"];
+
+    // Esc leaves focus mode without pausing.
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && document.body.classList.contains("focus-mode")) {
+        event.preventDefault();
+        focusDismissed = true;
+        exitFocusMode();
+      }
+    });
 
     window.addEventListener(
       "keydown",
@@ -3925,6 +3966,7 @@
     document.querySelectorAll(".size-button").forEach((button) => {
       button.addEventListener("click", () => {
         wordDisplay.style.setProperty("--caption-scale", button.dataset.scale);
+        fitCaption();
         document.querySelectorAll(".size-button").forEach((b) => {
           b.classList.remove("active");
           b.setAttribute("aria-pressed", "false");
