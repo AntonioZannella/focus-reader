@@ -681,19 +681,28 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
-  textarea, input[type="text"] {
+  /* Text fields: textarea, the naming / rename inputs, page number, search */
+  textarea, input[type="text"], input[type="number"], input[type="search"] {
     font: inherit;
+    font-size: 16px;
     color: var(--color-text);
     background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    padding: 10px 12px;
+    border: 2px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    padding: 0 16px;
+    min-height: 48px;
+    transition: border-color var(--t-fast) var(--ease);
   }
   textarea {
     display: block;
     width: 100%;
+    padding: 16px;
     resize: vertical;
     line-height: 1.6;
+  }
+  textarea:focus-visible, input[type="text"]:focus-visible,
+  input[type="number"]:focus-visible, input[type="search"]:focus-visible {
+    border-color: var(--color-brand);
   }
   textarea::placeholder, input::placeholder {
     color: var(--color-text-muted);
@@ -703,7 +712,51 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 16px;
+  }
+  /* small line icons drawn with a mask, so they follow the text color and
+     survive the code replacing a button's text */
+  #upload-button::before, #upload-pdf-button::before,
+  #previous-page-button::before, #next-page-button::after,
+  .page-search::before {
+    content: "";
+    flex: none;
+    width: 18px;
+    height: 18px;
+    background-color: currentColor;
+    -webkit-mask: var(--icon) center / contain no-repeat;
+    mask: var(--icon) center / contain no-repeat;
+  }
+  #upload-button, #upload-pdf-button {
+    --icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 15V4M7 9l5-5 5 5M4 20h16'/></svg>");
+  }
+  #previous-page-button {
+    --icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 18l-6-6 6-6'/></svg>");
+  }
+  #next-page-button {
+    --icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l6 6-6 6'/></svg>");
+  }
+  /* ghost button */
+  #toggle-full-document-button {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--color-brand);
+  }
+  .citations-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 4px;
+    color: var(--color-text);
+    font-size: 15px;
+    cursor: pointer;
+  }
+  .citations-option input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--color-brand);
   }
   /* sits with the playback controls so it's on screen as soon as you pause */
   #storage-warning, #revision-notice {
@@ -720,85 +773,145 @@
   #storage-warning button, #revision-notice button {
     margin-left: 8px;
   }
-  .citations-option {
-    color: var(--color-text-muted);
-    font-size: 14px;
-  }
   #upload-error {
     display: none;
     margin-top: 8px;
     font-size: 14px;
     color: var(--color-error);
   }
+
+  /* Naming prompt: an inline card in the brand tint */
   #naming-prompt {
-    margin-top: 12px;
-    padding: 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    background-color: var(--color-surface);
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    background-color: var(--color-brand-tint);
+  }
+  #naming-prompt label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 700;
   }
   #naming-prompt input {
-    margin: 0 6px;
+    width: min(100%, 320px);
+    margin: 0 8px 8px 0;
+    vertical-align: middle;
   }
   #naming-prompt button {
-    margin-top: 4px;
+    margin: 0 8px 8px 0;
+    vertical-align: middle;
+  }
+  #confirm-name-button {
+    font-weight: 700;
+    background-color: var(--color-brand);
+    border-color: var(--color-brand);
+    color: var(--color-on-brand);
+  }
+  #confirm-name-button:hover:not(:disabled) {
+    background-color: var(--color-brand-hover);
+    border-color: var(--color-brand-hover);
+  }
+  #skip-name-button {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--color-brand);
   }
 
-  /* ---------- Full document view ---------- */
+  /* ---------- Reading entry points ---------- */
   /* Shown once a document is open in the player (its words are clickable). */
   #reading-entry-points {
     display: none;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 16px;
   }
   .entry-label {
     color: var(--color-text-muted);
     font-size: 14px;
+    font-weight: 700;
+  }
+  /* Select Range: On */
+  #select-mode-button.is-on {
+    background-color: var(--color-brand-tint);
+    border-color: var(--color-brand);
+    color: var(--color-active-text);
   }
   #entry-hint {
     flex-basis: 100%;
     color: var(--color-text-muted);
-    font-size: 14px;
+    font-size: 13px;
   }
   #entry-hint:empty {
     display: none;
   }
 
+  /* ---------- Page controls and search ---------- */
   .page-nav, .page-search {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
   #page-counter {
     min-width: 110px;
     text-align: center;
+    font-weight: 700;
   }
   #page-input {
-    width: 70px;
+    width: 88px;
+    margin-left: 4px;
+  }
+  .page-search {
+    position: relative;
+    --icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='M20 20l-4-4'/></svg>");
+  }
+  /* the search icon, inset in the search field */
+  .page-search::before {
+    position: absolute;
+    left: 16px;
+    top: 15px;
+    color: var(--color-text-muted);
+    pointer-events: none;
   }
   #search-input {
     flex: 1 1 240px;
+    padding-left: 44px;
   }
   #search-results {
     max-height: 30vh;
     overflow-y: auto;
-    font-size: 14px;
+    font-size: 15px;
   }
   #search-results .search-summary {
     color: var(--color-text-muted);
-    margin: 4px 0;
+    margin: 4px 0 8px;
   }
   #search-results button {
     display: block;
     width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 10px 12px;
     text-align: left;
-    margin: 2px 0;
-    padding: 10px 18px;
     white-space: normal;
+    font-weight: 400;
+    line-height: 1.5;
+    background-color: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 0;
+  }
+  #search-results button:hover:not(:disabled) {
+    background-color: var(--color-surface-hover);
+  }
+  #search-results strong {
+    padding: 0 2px;
+    border-radius: 3px;
+    background-color: var(--color-warning-bg);
+    /* the cream tint alone barely shows on white */
+    box-shadow: inset 0 -2px 0 var(--color-warning-border);
   }
   .page-note {
     color: var(--color-text-muted);
@@ -821,16 +934,21 @@
     outline: 2px solid var(--color-warning);
     border-radius: 3px;
   }
+  /* A reading surface: UI font, ~66 characters a line, line breaks kept */
   #full-document-view {
     display: none;
     margin: 0;
-    max-height: 50vh;
+    max-height: 60vh;
     overflow-y: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
-    font-family: inherit;
-    font-size: 17px;
-    line-height: 1.75;
+    font-family: var(--font-ui);
+    font-size: 18px;
+    line-height: 1.6;
+    text-align: left;
+    /* the card stays full width; the right padding narrows the text column
+       to 30em, about 66 characters of Nunito (1ch is the wide "0") */
+    padding-right: max(24px, calc(100% - 30em - 24px));
   }
   .document-word {
     cursor: pointer;
@@ -854,23 +972,33 @@
   }
 
   /* ---------- Library ---------- */
-  .library-entry {
+  #library-list {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .library-entry {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    margin-bottom: 6px;
+    gap: 6px 8px;
+    padding: 16px;
     border: 1px solid var(--color-border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     background-color: var(--color-surface);
   }
   .library-entry-name {
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 16px;
+    font-weight: 700;
     cursor: pointer;
-    font-weight: 600;
-    flex: 1 1 auto;
   }
   .library-entry-name:hover {
+    color: var(--color-brand);
     text-decoration: underline;
   }
   .library-entry-size,
@@ -878,9 +1006,54 @@
     color: var(--color-text-muted);
     font-size: 13px;
   }
+  .library-entry-size::before {
+    content: "· ";
+  }
+  .library-progress {
+    grid-column: 1 / -1;
+    height: 6px;
+    margin: 4px 0;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-border);
+    overflow: hidden;
+  }
+  .library-progress > div {
+    height: 100%;
+    border-radius: inherit;
+    background-color: var(--color-brand-bright);
+  }
+  .library-entry button {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+  /* Delete: a ghost button in the error color */
+  .library-entry .library-delete {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--color-error);
+  }
+  .library-entry .library-delete:hover:not(:disabled) {
+    background-color: var(--color-error-bg);
+  }
   .library-entry input {
-    flex: 1 1 auto;
-    padding: 5px 10px;
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .library-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 16px;
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font-size: 14px;
+  }
+  .library-empty svg {
+    flex: none;
+    color: var(--color-brand);
   }
 </style>
 </head>
@@ -991,7 +1164,7 @@
       <div id="entry-hint"></div>
     </div>
     <div id="naming-prompt" style="display: none;">
-      Name this document:
+      <label for="document-name-input">Name this document:</label>
       <input type="text" id="document-name-input" placeholder="e.g. Chapter 1">
       <button id="confirm-name-button">Continue</button>
       <button id="skip-name-button">Skip (don't save)</button>
@@ -1764,12 +1937,17 @@
         : `${size} · ${saved.length} of ${current.length} parts saved`;
     }
 
-    function formatProgress(documentRecord) {
+    // How far through a saved document its position is, 0-100; null if not started.
+    function progressPercent(documentRecord) {
       if (documentRecord.positionWordIndex < 0 || documentRecord.words.length === 0) {
-        return "Not started";
+        return null;
       }
-      const percent = Math.round(((documentRecord.positionWordIndex + 1) / documentRecord.words.length) * 100);
-      return `${percent}% through`;
+      return ((documentRecord.positionWordIndex + 1) / documentRecord.words.length) * 100;
+    }
+
+    function formatProgress(documentRecord) {
+      const percent = progressPercent(documentRecord);
+      return percent === null ? "Not started" : `${Math.round(percent)}% through`;
     }
 
     const libraryListEl = document.getElementById("library-list");
@@ -1787,6 +1965,13 @@
       });
 
       libraryListEl.innerHTML = "";
+      if (!allDocs.length) {
+        const empty = document.createElement("p");
+        empty.className = "library-empty";
+        empty.innerHTML = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>';
+        empty.append("No saved documents yet. Name a document when you start it to keep it here.");
+        libraryListEl.appendChild(empty);
+      }
       allDocs.forEach((record) => {
         const row = document.createElement("div");
         row.className = "library-entry";
@@ -1840,6 +2025,7 @@
           });
 
           const deleteBtn = document.createElement("button");
+          deleteBtn.className = "library-delete";
           deleteBtn.textContent = "Delete";
           deleteBtn.addEventListener("click", async () => {
             await deleteLibraryDocument(record.id);
@@ -1861,6 +2047,17 @@
           row.appendChild(nameSpan);
           row.appendChild(progressSpan);
           row.appendChild(sizeSpan);
+          const percent = progressPercent(record);
+          if (percent !== null) {
+            // decorative: the "N% through" text above says the same
+            const bar = document.createElement("div");
+            bar.className = "library-progress";
+            bar.setAttribute("aria-hidden", "true");
+            const fill = document.createElement("div");
+            fill.style.width = `${percent}%`;
+            bar.appendChild(fill);
+            row.appendChild(bar);
+          }
           row.appendChild(renameBtn);
           row.appendChild(deleteBtn);
         }
@@ -4032,6 +4229,7 @@
     function setSelectMode(on) {
       isSelectMode = on;
       selectModeButton.textContent = `Select Range: ${on ? "On" : "Off"}`;
+      selectModeButton.classList.toggle("is-on", on);
       if (on) {
         findingStartPoint = false;
         showDocumentView();
