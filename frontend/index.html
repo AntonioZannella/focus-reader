@@ -367,6 +367,9 @@
     text-shadow: 0.03em 0.05em 0 var(--color-chunk-outline);
     min-height: 1.1em;
     overflow-wrap: anywhere;
+    /* a long chunk at Extra large spills past the stage over the controls;
+       it must never catch their clicks */
+    pointer-events: none;
   }
   #loading-indicator {
     display: none;
@@ -463,96 +466,202 @@
   }
 
   /* ---------- Controls ---------- */
+  /* Base button: everything except the primary/transport buttons, the
+     segmented selectors, the mode tabs and the Theme ghost button. */
   button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 18px;
     font: inherit;
     font-size: 14px;
+    font-weight: 600;
     color: var(--color-text);
     background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-pill);
-    padding: 7px 14px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+    transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
   }
   button:hover:not(:disabled) {
     background-color: var(--color-surface-hover);
   }
-  /* Selected pills and brand buttons keep their fill on hover; the generic
-     hover above would otherwise replace it. */
-  .speed-button.active:hover, .chunk-button.active:hover, .size-button.active:hover,
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  /* 3px ring 2px outside the button; the gap is drawn in the surface color.
+     !important so selected pills' card shadow can't hide it. The transparent
+     outline keeps a ring in Windows high-contrast mode. */
+  button:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 5px var(--color-focus) !important;
+  }
+  input:focus-visible, textarea:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  .mode-tab {
+    border-radius: var(--radius-pill);
+  }
   .mode-tab[aria-selected="true"]:hover {
     background-color: var(--color-surface);
+  }
+
+  /* Primary (brand) buttons */
+  #play-pause-button, #start-button {
+    font-weight: 700;
+    background-color: var(--color-brand);
+    border-color: var(--color-brand);
+    color: var(--color-on-brand);
   }
   #play-pause-button:hover:not(:disabled), #start-button:hover:not(:disabled) {
     background-color: var(--color-brand-hover);
     border-color: var(--color-brand-hover);
   }
-  button:focus-visible, input:focus-visible, textarea:focus-visible {
-    outline: 3px solid var(--color-focus);
-    outline-offset: 2px;
+  #play-pause-button:active:not(:disabled), #start-button:active:not(:disabled) {
+    transform: translateY(1px);
   }
-  button:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-  .speed-button.active, .chunk-button.active, .size-button.active {
-    font-weight: 700;
-    background-color: var(--color-active-background);
-    border-color: var(--color-active-text);
-    color: var(--color-active-text);
-  }
+
   .controls {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     padding: 24px;
     border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-  }
-  .transport button {
-    white-space: nowrap;
   }
   @media (max-width: 599px) {
     .controls {
       padding: 24px 16px;
     }
   }
+
+  /* Transport: Back 10 / Play-Pause / Forward 10, icon before the text */
   .transport {
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 12px;
+  }
+  .transport button {
+    white-space: nowrap;
+    border-radius: var(--radius-pill);
+  }
+  .transport svg {
+    flex: none;
+    width: 20px;
+    height: 20px;
   }
   #play-pause-button {
-    min-width: 96px;
-    padding: 10px 22px;
-    font-size: 16px;
-    font-weight: 700;
-    background-color: var(--color-brand);
-    border-color: var(--color-brand);
-    color: var(--color-on-brand);
+    min-width: 120px;
+    min-height: 56px;
+    padding: 0 28px;
+    font-size: 17px;
   }
+  #back-button, #forward-button {
+    min-height: 48px;
+    padding: 0 20px;
+    border: 2px solid var(--color-border-strong);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+  }
+  #back-button:hover, #forward-button:hover {
+    background-color: var(--color-surface-hover);
+  }
+  /* Phone: the three don't fit in one row, so Play gets a full-width row on
+     top and Back/Forward share the row under it. */
+  @media (max-width: 599px) {
+    .transport {
+      flex-wrap: wrap;
+      gap: 8px;
+      width: 100%;
+    }
+    #play-pause-button {
+      order: -1;
+      flex: 1 1 100%;
+    }
+    #back-button, #forward-button {
+      flex: 1 1 0;
+      padding: 0 12px;
+    }
+  }
+
+  /* Speed / Chunk / Size: eyebrow label, then a segmented pill selector */
   .control-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px 12px;
   }
   .control-label {
     color: var(--color-text-muted);
     font-size: 12px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    margin-right: 4px;
+    min-width: 48px;
   }
-  .control-row button {
-    padding: 5px 11px;
-    font-size: 13px;
+  .segmented {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-background);
+  }
+  .segmented button {
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 14px;
+    border-color: transparent;
+    border-radius: var(--radius-pill);
+    background-color: transparent;
+    color: var(--color-text-muted);
+  }
+  .segmented button:hover:not(:disabled) {
+    background-color: var(--color-surface-hover);
+  }
+  .speed-button.active, .chunk-button.active, .size-button.active,
+  .speed-button.active:hover, .chunk-button.active:hover, .size-button.active:hover {
+    background-color: var(--color-surface);
+    color: var(--color-brand);
+    box-shadow: var(--shadow-card);
+  }
+  /* A wrapped pill track turns into a lozenge; a smaller radius reads better. */
+  @media (max-width: 599px) {
+    .segmented {
+      border-radius: var(--radius-xl);
+    }
+  }
+
+  /* Native audio element: a quiet full-width row under the selectors */
+  .audio-row {
+    width: 100%;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border);
   }
   #audio-player {
+    display: block;
     width: 100%;
-    max-width: 480px;
-    height: 36px;
+    height: 40px;
+    color: var(--color-text-muted);
+    opacity: 0.85;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+    button:active {
+      transform: none !important;
+    }
   }
 
   /* ---------- Panels ---------- */
@@ -595,12 +704,6 @@
     align-items: center;
     gap: 8px;
     margin-top: 12px;
-  }
-  #start-button {
-    font-weight: 700;
-    background-color: var(--color-brand);
-    border-color: var(--color-brand);
-    color: var(--color-on-brand);
   }
   /* sits with the playback controls so it's on screen as soon as you pause */
   #storage-warning, #revision-notice {
@@ -694,6 +797,7 @@
     width: 100%;
     text-align: left;
     margin: 2px 0;
+    padding: 10px 18px;
     white-space: normal;
   }
   .page-note {
@@ -778,10 +882,6 @@
     flex: 1 1 auto;
     padding: 5px 10px;
   }
-  .library-entry button {
-    padding: 4px 11px;
-    font-size: 13px;
-  }
 </style>
 </head>
 <body>
@@ -818,38 +918,46 @@
 
   <section class="controls">
     <div class="transport">
-      <button id="back-button">Back 10</button>
-      <button id="play-pause-button">Play</button>
-      <button id="forward-button">Forward 10</button>
+      <button id="back-button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M11 6v12L2.5 12zM21 6v12l-8.5-6z"/></svg>Back 10</button>
+      <button id="play-pause-button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Play</button>
+      <button id="forward-button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M13 6v12l8.5-6zM3 6v12l8.5-6z"/></svg>Forward 10</button>
     </div>
     <div id="speed-buttons" class="control-row">
       <span class="control-label">Speed</span>
-      <button class="speed-button" data-speed="0.25">0.25x</button>
-      <button class="speed-button" data-speed="0.5">0.5x</button>
-      <button class="speed-button" data-speed="0.75">0.75x</button>
-      <button class="speed-button active" data-speed="1">1x</button>
-      <button class="speed-button" data-speed="1.25">1.25x</button>
-      <button class="speed-button" data-speed="1.5">1.5x</button>
-      <button class="speed-button" data-speed="1.75">1.75x</button>
-      <button class="speed-button" data-speed="2">2x</button>
+      <div class="segmented">
+        <button aria-pressed="false" class="speed-button" data-speed="0.25">0.25x</button>
+        <button aria-pressed="false" class="speed-button" data-speed="0.5">0.5x</button>
+        <button aria-pressed="false" class="speed-button" data-speed="0.75">0.75x</button>
+        <button aria-pressed="true" class="speed-button active" data-speed="1">1x</button>
+        <button aria-pressed="false" class="speed-button" data-speed="1.25">1.25x</button>
+        <button aria-pressed="false" class="speed-button" data-speed="1.5">1.5x</button>
+        <button aria-pressed="false" class="speed-button" data-speed="1.75">1.75x</button>
+        <button aria-pressed="false" class="speed-button" data-speed="2">2x</button>
+      </div>
     </div>
     <div id="chunk-buttons" class="control-row">
       <span class="control-label">Chunk</span>
-      <button class="chunk-button active" data-chunk-size="0">Phrase</button>
-      <button class="chunk-button" data-chunk-size="1">1 word</button>
-      <button class="chunk-button" data-chunk-size="2">2 words</button>
-      <button class="chunk-button" data-chunk-size="3">3 words</button>
-      <button class="chunk-button" data-chunk-size="4">4 words</button>
-      <button class="chunk-button" data-chunk-size="5">5 words</button>
+      <div class="segmented">
+        <button aria-pressed="true" class="chunk-button active" data-chunk-size="0">Phrase</button>
+        <button aria-pressed="false" class="chunk-button" data-chunk-size="1">1 word</button>
+        <button aria-pressed="false" class="chunk-button" data-chunk-size="2">2 words</button>
+        <button aria-pressed="false" class="chunk-button" data-chunk-size="3">3 words</button>
+        <button aria-pressed="false" class="chunk-button" data-chunk-size="4">4 words</button>
+        <button aria-pressed="false" class="chunk-button" data-chunk-size="5">5 words</button>
+      </div>
     </div>
     <div id="size-buttons" class="control-row">
       <span class="control-label">Size</span>
-      <button class="size-button" data-scale="0.7">Small</button>
-      <button class="size-button active" data-scale="1">Medium</button>
-      <button class="size-button" data-scale="1.3">Large</button>
-      <button class="size-button" data-scale="1.6">Extra large</button>
+      <div class="segmented">
+        <button aria-pressed="false" class="size-button" data-scale="0.7">Small</button>
+        <button aria-pressed="true" class="size-button active" data-scale="1">Medium</button>
+        <button aria-pressed="false" class="size-button" data-scale="1.3">Large</button>
+        <button aria-pressed="false" class="size-button" data-scale="1.6">Extra large</button>
+      </div>
     </div>
-    <audio id="audio-player" controls></audio>
+    <div class="audio-row">
+      <audio id="audio-player" controls></audio>
+    </div>
     <div id="revision-notice">
       <span id="revision-notice-text"></span>
       <button id="revision-notice-dismiss">Dismiss</button>
@@ -920,6 +1028,15 @@
     const BACKEND_URL = "/synthesize";
     const audioPlayer = document.getElementById("audio-player");
     const playPauseButton = document.getElementById("play-pause-button");
+    // The Play/Pause label with its icon. The icon has no text nodes, so the
+    // button's textContent is still exactly "Play" or "Pause".
+    const PLAY_PAUSE_ICONS = {
+      Play: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+      Pause: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
+    };
+    function setPlayPauseLabel(label) {
+      playPauseButton.innerHTML = PLAY_PAUSE_ICONS[label] + label;
+    }
     const wordDisplay = document.getElementById("word-display");
     const loadingIndicator = document.getElementById("loading-indicator");
     const errorMessage = document.getElementById("error-message");
@@ -2693,7 +2810,7 @@
       wantsToPlay = false;
       hidePreparingNotice();
       exitFocusMode();
-      playPauseButton.textContent = "Play";
+      setPlayPauseLabel("Play");
     }
 
     preparingNoticePause.addEventListener("click", () => togglePlayPause());
@@ -2996,7 +3113,7 @@
         // waiting for a section's audio: this decides whether it plays once
         // it's ready (it keeps preparing either way)
         wantsToPlay = !wantsToPlay;
-        playPauseButton.textContent = wantsToPlay ? "Pause" : "Play";
+        setPlayPauseLabel(wantsToPlay ? "Pause" : "Play");
         if (wantsToPlay && isReady(waitingFor.index)) {
           startWaitingSection();
         } else if (wantsToPlay) {
@@ -3022,7 +3139,7 @@
       if (sectionLoading) {
         // a section is loading: this decides whether it plays when it's ready
         wantsToPlay = !wantsToPlay;
-        playPauseButton.textContent = wantsToPlay ? "Pause" : "Play";
+        setPlayPauseLabel(wantsToPlay ? "Pause" : "Play");
         if (!wantsToPlay) {
           exitFocusMode();
         }
@@ -3305,11 +3422,11 @@
     playPauseButton.addEventListener("click", togglePlayPause);
 
     audioPlayer.addEventListener("play", () => {
-      playPauseButton.textContent = "Pause";
+      setPlayPauseLabel("Pause");
     });
 
     audioPlayer.addEventListener("pause", () => {
-      playPauseButton.textContent = "Play";
+      setPlayPauseLabel("Play");
     });
 
     document.getElementById("back-button").addEventListener("click", skipBack);
@@ -3406,8 +3523,12 @@
       button.addEventListener("click", () => {
         audioPlayer.playbackRate = parseFloat(button.dataset.speed);
 
-        document.querySelectorAll(".speed-button").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".speed-button").forEach((b) => {
+          b.classList.remove("active");
+          b.setAttribute("aria-pressed", "false");
+        });
         button.classList.add("active");
+        button.setAttribute("aria-pressed", "true");
       });
     });
 
@@ -3475,8 +3596,12 @@
     document.querySelectorAll(".size-button").forEach((button) => {
       button.addEventListener("click", () => {
         wordDisplay.style.setProperty("--caption-scale", button.dataset.scale);
-        document.querySelectorAll(".size-button").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".size-button").forEach((b) => {
+          b.classList.remove("active");
+          b.setAttribute("aria-pressed", "false");
+        });
         button.classList.add("active");
+        button.setAttribute("aria-pressed", "true");
       });
     });
 
@@ -3484,8 +3609,12 @@
       button.addEventListener("click", () => {
         chunkSize = parseInt(button.dataset.chunkSize, 10);
 
-        document.querySelectorAll(".chunk-button").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll(".chunk-button").forEach((b) => {
+          b.classList.remove("active");
+          b.setAttribute("aria-pressed", "false");
+        });
         button.classList.add("active");
+        button.setAttribute("aria-pressed", "true");
 
         // while playing, the sync loop picks up the new size on its own
         if (audioPlayer.paused) {
