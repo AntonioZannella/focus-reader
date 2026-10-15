@@ -369,7 +369,8 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
-    padding: 32px 24px;
+    /* extra room at the bottom for the progress bar and full screen button */
+    padding: 32px 24px 76px;
     background: radial-gradient(ellipse at center, var(--color-stage-glow) 0%, var(--color-stage-bg) 70%);
     /* 1px less than the card, so it sits flush inside the card's border */
     border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
@@ -387,6 +388,9 @@
        to shrink a chunk that wouldn't fit on the stage */
     font-size: calc(clamp(40px, 9.4vw, 88px) * var(--caption-scale, 1) * var(--caption-fit, 1));
     width: 100%;
+    /* never squeezed by the stage's flex layout (the text would then spill
+       out of its box, over a banner, where fitCaption can't measure it) */
+    flex-shrink: 0;
     /* room for the outline stroke, which is drawn outside the glyphs */
     padding-inline: 0.15em;
     line-height: 1.1;
@@ -889,6 +893,9 @@
     font-weight: 600;
     line-height: 1.5;
     text-align: left;
+    /* messages quote file and document names, which can be one long run
+       of characters with no spaces */
+    overflow-wrap: anywhere;
   }
   #error-message::before, #upload-error::before, #storage-warning::before,
   #revision-notice::before, #preparing-notice::before {
@@ -990,8 +997,11 @@
   }
   #entry-hint {
     flex-basis: 100%;
+    min-width: 0;
     color: var(--color-text-muted);
     font-size: 13px;
+    /* quotes document words, which can be long unbroken runs (URLs) */
+    overflow-wrap: anywhere;
   }
   #entry-hint:empty {
     display: none;
@@ -1391,12 +1401,28 @@
       if (!maxHeight || !wordDisplay.clientWidth) {
         return; // stage not laid out (hidden); fit again when it changes
       }
-      while (fit > 0.3 && (wordDisplay.scrollWidth > wordDisplay.clientWidth || wordDisplay.offsetHeight > maxHeight)) {
+      // the stage overflowing covers a banner shown with the caption (e.g.
+      // "Preparing the next section…" under the last chunk)
+      // the stage centers its content, so content too tall for it spills
+      // past both edges: the caption (always first) rising above the top
+      // padding is the sign
+      const contentTop = captionStage.getBoundingClientRect().top + parseFloat(getComputedStyle(captionStage).paddingTop);
+      const tooBig = () => wordDisplay.scrollWidth > wordDisplay.clientWidth
+        || wordDisplay.offsetHeight > maxHeight
+        || wordDisplay.getBoundingClientRect().top < contentTop - 1;
+      while (fit > 0.3 && tooBig()) {
         fit *= 0.9;
         wordDisplay.style.setProperty("--caption-fit", fit);
       }
     }
     new MutationObserver(fitCaption).observe(wordDisplay, { childList: true, characterData: true, subtree: true });
+    // banners on the stage are shown and hidden through their style; the
+    // caption's own style (set by fitCaption) is ignored so this can't loop
+    new MutationObserver((mutations) => {
+      if (mutations.some((m) => m.target !== wordDisplay)) {
+        fitCaption();
+      }
+    }).observe(captionStage, { attributes: true, attributeFilter: ["style"], subtree: true });
     window.addEventListener("resize", fitCaption);
     const loadingIndicator = document.getElementById("loading-indicator");
     const errorMessage = document.getElementById("error-message");
@@ -4545,6 +4571,14 @@
         fullDocumentView.style.display = "none";
         pageControls.style.display = "none";
         toggleFullDocumentButton.textContent = "Show Full Document";
+        // nothing left to click: drop a half-made range or a pending Find
+        // Start Point (a finished range stays, so Play Range still works)
+        findingStartPoint = false;
+        if (isSelectMode && selectionEndIndex === null) {
+          setSelectMode(false);
+        } else {
+          updateEntryHint();
+        }
       }
     });
 
