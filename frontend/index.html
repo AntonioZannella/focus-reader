@@ -339,6 +339,18 @@
   }
   /* ponytail: a boxed word can't wrap mid-word, so one longer than the
      stage overflows; only plausible at Extra large on a phone */
+  /* The word being spoken in a multi-word chunk: yellow in Normal mode;
+     in Education mode (whose letters are already colored) the other words
+     dim instead */
+  #word-display .cw.current {
+    color: var(--color-caption-current, #ffd84d);
+  }
+  body.mode-education #word-display .cw.current {
+    color: inherit;
+  }
+  body.mode-education #word-display.has-current .cw:not(.current) {
+    opacity: 0.45;
+  }
   .caption-word {
     white-space: nowrap;
   }
@@ -501,6 +513,39 @@
   }
   body.focus-mode .reading-progress {
     opacity: 0.5;
+  }
+  /* Full screen (focus mode) on/off, bottom right of the stage, above the
+     progress bar; the icon flips with the mode */
+  #focus-toggle {
+    position: absolute;
+    right: 14px;
+    bottom: 30px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-stage-text-muted);
+    cursor: pointer;
+    --icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'/></svg>");
+  }
+  body.focus-mode #focus-toggle {
+    --icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5'/></svg>");
+  }
+  #focus-toggle:hover {
+    color: var(--color-chunk-text);
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+  #focus-toggle::before {
+    content: "";
+    display: block;
+    width: 22px;
+    height: 22px;
+    margin: auto;
+    background-color: currentColor;
+    -webkit-mask: var(--icon) center / contain no-repeat;
+    mask: var(--icon) center / contain no-repeat;
   }
   body.focus-mode.audio-paused #focus-paused-hint {
     display: block;
@@ -1208,6 +1253,7 @@
       <button id="retry-button">Retry</button>
     </div>
     <div class="reading-progress" aria-hidden="true" hidden><div></div></div>
+    <button id="focus-toggle" aria-pressed="false" aria-label="Full screen" title="Full screen (F)"></button>
   </section>
 
   <section class="controls">
@@ -3281,10 +3327,22 @@
         } else {
           showCaption("");
         }
+        highlightCaptionWord(-1);
         return;
       }
 
-      showCaption(captionGroup(words, currentIndex).map((w) => w.word).join(" "));
+      const group = captionGroup(words, currentIndex);
+      showCaption(group.map((w) => w.word).join(" "));
+      highlightCaptionWord(group.indexOf(words[currentIndex]));
+    }
+
+    // Marks the word being spoken inside a multi-word chunk (karaoke style);
+    // -1, or a one-word chunk, marks nothing.
+    function highlightCaptionWord(position) {
+      const spans = wordDisplay.querySelectorAll(".cw");
+      const mark = spans.length > 1 ? position : -1;
+      spans.forEach((span, i) => span.classList.toggle("current", i === mark));
+      wordDisplay.classList.toggle("has-current", mark >= 0);
     }
 
     // Puts caption text on screen. In Education mode, welded sounds are green
@@ -3321,12 +3379,21 @@
         return;
       }
       shownCaption = key;
-      if (!education) {
-        wordDisplay.textContent = text;
-        return;
-      }
       wordDisplay.textContent = "";
+      // every word gets its own .cw span, so highlightCaptionWord() can mark
+      // the one being spoken; spaces stay plain text between them
       text.split(/(\s+)/).forEach((part) => {
+        if (!part || /^\s+$/.test(part)) {
+          wordDisplay.append(part);
+          return;
+        }
+        if (!education) {
+          const plain = document.createElement("span");
+          plain.className = "cw";
+          plain.textContent = part;
+          wordDisplay.append(plain);
+          return;
+        }
         const kind = new Array(part.length).fill(""); // by string index, like the rules
         shortVowelIndexes(part).forEach((i) => { kind[i] = "short-vowel"; });
         weldedRanges(part).forEach(([start, end]) => kind.fill("welded", start, end));
@@ -3354,12 +3421,9 @@
         };
         // A word with a box is kept on one line: the box (inline-block)
         // would otherwise let the line break inside the word ("jump / ed").
-        let target = wordDisplay;
-        if (affix.some((n) => n >= 0)) {
-          target = document.createElement("span");
-          target.className = "caption-word";
-          wordDisplay.append(target);
-        }
+        const target = document.createElement("span");
+        target.className = affix.some((n) => n >= 0) ? "cw caption-word" : "cw";
+        wordDisplay.append(target);
         let i = 0;
         while (i < part.length) {
           let j = i;
@@ -3798,6 +3862,7 @@
         return;
       }
       document.body.classList.add("focus-mode");
+      setFocusToggle(true);
       fitCaption(); // the stage just grew to the full window
     }
 
@@ -3806,6 +3871,7 @@
         return;
       }
       document.body.classList.remove("focus-mode");
+      setFocusToggle(false);
       fitCaption(); // the stage just shrank back
       // land on the chunk display and playback controls, not wherever the
       // page happened to be scrolled before playback started
@@ -3842,12 +3908,39 @@
 
     const SHORTCUT_KEYS = [" ", "ArrowLeft", "ArrowRight"];
 
-    // Esc leaves focus mode without pausing.
+    // Full screen (focus mode) by hand: the stage button or F toggles it, Esc
+    // leaves it. Neither pauses. Leaving by hand keeps it off for the rest of
+    // the playback (focusDismissed); entering by hand works while paused too.
+    const focusToggle = document.getElementById("focus-toggle");
+    function setFocusToggle(on) {
+      // looked up here, not via the const below: focus mode can change
+      // before this part of the script has run
+      const focusToggle = document.getElementById("focus-toggle");
+      focusToggle.setAttribute("aria-pressed", on ? "true" : "false");
+      focusToggle.setAttribute("aria-label", on ? "Exit full screen" : "Full screen");
+      focusToggle.title = on ? "Exit full screen (F or Esc)" : "Full screen (F)";
+    }
+    function toggleFocusMode() {
+      if (document.body.classList.contains("focus-mode")) {
+        focusDismissed = true;
+        exitFocusMode();
+      } else {
+        focusDismissed = false;
+        enterFocusMode();
+      }
+    }
+    focusToggle.addEventListener("click", toggleFocusMode);
     window.addEventListener("keydown", (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat || isTypingTarget(event.target)) {
+        return;
+      }
       if (event.key === "Escape" && document.body.classList.contains("focus-mode")) {
         event.preventDefault();
         focusDismissed = true;
         exitFocusMode();
+      } else if (event.key === "f" || event.key === "F") {
+        event.preventDefault();
+        toggleFocusMode();
       }
     });
 
@@ -4407,6 +4500,13 @@
       if (on) {
         findingStartPoint = false;
         showDocumentView();
+      } else if (selectionStartIndex !== null) {
+        // turning it off drops the range and its colors; a range already
+        // playing still stops at its end (selectionStopWord is kept)
+        selectionStartIndex = null;
+        selectionEndIndex = null;
+        applySelectionHighlight(); // also updates the hint and Play Range
+        return;
       }
       updateEntryHint();
     }
