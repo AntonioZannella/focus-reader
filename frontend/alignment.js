@@ -435,6 +435,25 @@ function affixRanges(word, isWord) {
   return ranges.map(([a, b]) => [a + offset, b + offset]);
 }
 
+// Language mode: the sound-it-out spelling (from frontend/sounds.txt) of a
+// caption word, or null if the dictionary doesn't have it (names, numbers...).
+// Punctuation around the word is ignored; a hyphenated word is looked up
+// part by part ("well-known" -> "wel-nohn").
+function soundsFor(word, lookup) {
+  const w = word.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/^[^a-z]+|[^a-z]+$/g, "");
+  if (!w) {
+    return null;
+  }
+  if (lookup.has(w)) {
+    return lookup.get(w);
+  }
+  const parts = w.split("-");
+  if (parts.length > 1 && parts.every((part) => lookup.has(part))) {
+    return parts.map((part) => lookup.get(part)).join("-");
+  }
+  return null;
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { textWords, comparableText, alignTimings, ALIGN_LOOKAHEAD_WORDS, phraseRanges, shortVowelIndexes, weldedRanges, affixRanges };
+  module.exports = { textWords, comparableText, alignTimings, ALIGN_LOOKAHEAD_WORDS, phraseRanges, shortVowelIndexes, weldedRanges, affixRanges, soundsFor };
 }

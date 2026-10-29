@@ -81,6 +81,8 @@
     --color-short-vowel: #ff6fb5;
     --color-welded: #4ade80;
     --color-affix: #facc15;
+    /* Language mode: the stressed syllable in a word's sound-it-out spelling */
+    --color-stress: #67e8f9;
     /* Selection range: drawn in the full document view (a surface), so these
        follow the theme. Light: white text passes 4.5:1 on start/end, dark
        text 4.7:1 on between, and each fill is 3:1+ against white. Dark keeps
@@ -345,6 +347,27 @@
   #word-display .cw.current {
     color: var(--color-caption-current, #ffd84d);
   }
+  /* In every mode the spoken word also grows a little and sits above its
+     neighbours. inline-block because a transform doesn't apply to inline
+     text; the scale doesn't change layout, so the line never reflows. */
+  #word-display .cw {
+    display: inline-block;
+    transition: transform 120ms ease-out;
+  }
+  /* wider gaps so the grown word doesn't touch the ones beside it */
+  #word-display {
+    word-spacing: 0.12em;
+  }
+  #word-display .cw.current {
+    position: relative;
+    z-index: 1;
+    transform: scale(1.1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #word-display .cw {
+      transition: none;
+    }
+  }
   body.mode-education #word-display .cw.current {
     color: inherit;
   }
@@ -353,6 +376,31 @@
   }
   .caption-word {
     white-space: nowrap;
+  }
+  /* Language mode: each word's sound-it-out spelling under it, in a plain
+     font without the caption's heavy outline */
+  #word-display ruby {
+    ruby-position: under;
+  }
+  #word-display rt {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.36em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    -webkit-text-stroke: 0;
+    text-shadow: none;
+    padding-top: 0.15em;
+  }
+  /* the spoken word turns yellow; its spelling stays white so the
+     stressed syllable still shows */
+  #word-display .cw.current rt {
+    color: var(--color-chunk-text);
+  }
+  #word-display rt .stress {
+    color: var(--color-stress);
+  }
+  body.mode-language #word-display {
+    line-height: 1.6;
   }
   /* Anything marked education-only appears in Education mode only. */
   body:not(.mode-education) .education-only {
@@ -1242,6 +1290,7 @@
     <nav class="mode-tabs" role="tablist" aria-label="Mode">
       <button class="mode-tab" role="tab" data-mode="normal" aria-selected="true">Normal</button>
       <button class="mode-tab" role="tab" data-mode="education" aria-selected="false">Education</button>
+      <button class="mode-tab" role="tab" data-mode="language" aria-selected="false">Language</button>
     </nav>
     <button id="theme-toggle" type="button" aria-label="Theme: System" title="Theme: System">Theme</button>
   </div>
@@ -3411,7 +3460,8 @@
     }
     function showCaption(text) {
       const education = document.body.classList.contains("mode-education");
-      const key = (education ? "e:" : "n:") + text;
+      const language = document.body.classList.contains("mode-language");
+      const key = (education ? "e:" : language ? `l${!!soundWords}:` : "n:") + text;
       if (key === shownCaption) {
         return;
       }
@@ -3427,7 +3477,7 @@
         if (!education) {
           const plain = document.createElement("span");
           plain.className = "cw";
-          plain.textContent = part;
+          plain.append(language ? withPronunciation(part) : part);
           wordDisplay.append(plain);
           return;
         }
@@ -3437,6 +3487,51 @@
         // which affix (prefix/suffix) each letter is in, -1 for none
         const affix = new Array(part.length).fill(-1);
         if (affixWords) {
+    // Language mode: sound-it-out spellings (frontend/sounds.txt, word ->
+    // "BRAH-kuh-lee"), loaded the first time Language mode is on; null until then.
+    // ponytail: the whole 2.4 MB list is loaded at once (the browser caches
+    // it); split it by first letter if hosting makes the load slow
+    let soundWords = null;
+    let soundWordsRequested = false;
+    function loadSoundWords() {
+      if (soundWordsRequested) {
+        return;
+      }
+      soundWordsRequested = true;
+      fetch("sounds.txt")
+        .then((response) => (response.ok ? response.text() : Promise.reject(new Error(`status ${response.status}`))))
+        .then((text) => {
+          soundWords = new Map(text.split("\n").filter((line) => line && !line.startsWith("#")).map((line) => line.split("\t")));
+          shownCaption = null; // redraw with spellings
+          updateWordDisplay();
+        })
+        .catch((error) => {
+          soundWordsRequested = false; // try again next time
+          console.warn("The sound-it-out spellings for Language mode couldn't be loaded:", error);
+        });
+    }
+    // A word with its sound-it-out spelling under it; the stressed syllable
+    // (in capitals in sounds.txt) is also colored.
+    function withPronunciation(word) {
+      const sounds = soundWords && soundsFor(word, soundWords);
+      if (!sounds) {
+        return document.createTextNode(word);
+      }
+      const ruby = document.createElement("ruby");
+      const rt = document.createElement("rt");
+      sounds.split(/(-)/).forEach((piece) => {
+        if (/[A-Z]/.test(piece)) {
+          const stress = document.createElement("span");
+          stress.className = "stress";
+          stress.textContent = piece;
+          rt.append(stress);
+        } else {
+          rt.append(piece);
+        }
+      });
+      ruby.append(word, rt);
+      return ruby;
+    }
           affixRanges(part, (w) => affixWords.has(w)).forEach(([start, end], n) => affix.fill(n, start, end));
         }
         // colored runs: consecutive letters of the same kind in one span
@@ -4032,8 +4127,9 @@
       });
     });
 
-    // Normal / Education mode. Both share everything; Education adds its
-    // own features, marked with the education-only class (hidden in Normal).
+    // Normal / Education / Language mode. All share everything; Education adds
+    // its own features, marked with the education-only class (hidden in the
+    // others), and Language shows each word's sound-it-out spelling under it.
     // The choice is remembered in this browser.
     function setMode(mode) {
       document.body.classList.toggle("mode-education", mode === "education");
@@ -4055,7 +4151,8 @@
       tab.addEventListener("click", () => setMode(tab.dataset.mode));
     });
     try {
-      setMode(localStorage.getItem("focusReaderMode") === "education" ? "education" : "normal");
+      const saved = localStorage.getItem("focusReaderMode");
+      setMode(saved === "education" || saved === "language" ? saved : "normal");
     } catch (error) {
       setMode("normal");
     }
@@ -4065,12 +4162,16 @@
     const themeToggle = document.getElementById("theme-toggle");
     const THEME_ORDER = ["system", "light", "dark"];
     const THEME_NAMES = { system: "System", light: "Light", dark: "Dark" };
+      document.body.classList.toggle("mode-language", mode === "language");
     function showTheme(theme) {
       const label = `Theme: ${THEME_NAMES[theme]}`;
       themeToggle.setAttribute("aria-label", label);
       themeToggle.title = label;
     }
     themeToggle.addEventListener("click", () => {
+      if (mode === "language") {
+        loadSoundWords();
+      }
       const current = document.documentElement.dataset.theme || "system";
       const theme = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
       if (theme === "system") {

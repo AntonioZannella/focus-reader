@@ -37,6 +37,8 @@ One small server (`backend/server.py`, Python and Flask) delivers both the page 
 
 **Education mode.** A tab at the top switches between Normal and Education. Education mode marks up the caption for reading practice: short vowels in pink, welded sounds (-ang, -ing, -ank...) in green, and a thin yellow box around prefixes and suffixes. These come from phonics rules and an English word list (`frontend/words.txt`), not a pronunciation dictionary, so unusual words can be marked wrongly.
 
+**Language mode.** A third tab, for people learning English: each caption word shows how to say it underneath, spelled out by sound in syllables, with the stressed one in capitals and cyan ("broccoli" shows BRAH-kuh-lee). American English. The spellings are made from the CMU Pronouncing Dictionary (`frontend/sounds.txt`, built by `tools/make_sounds.py`). Words it lacks (names, numbers) show nothing, and a word with two pronunciations always gets the first ("read" is always "reed").
+
 **Equations.** When playback reaches an equation in a PDF, it pauses, shows the equation's text for five seconds, and continues.
 
 ## Setup
@@ -116,6 +118,8 @@ This runs three parts and exits non-zero if anything fails:
 ## Credits
 
 The word list in `frontend/words.txt` comes from the en_US Hunspell dictionary in [SCOWL](http://wordlist.aspell.net), copyright Kevin Atkinson and others; its copyright and permission notices are in `frontend/words-LICENSE.txt`.
+
+The sound-it-out spellings in `frontend/sounds.txt` are converted from the [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict), copyright Carnegie Mellon University; its notice is in `frontend/sounds-LICENSE.txt`.
 
 ## How it was built
 
