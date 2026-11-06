@@ -175,14 +175,17 @@
   // --- Sections ---------------------------------------------------------------
   await test("sections cover the text exactly once", async () => {
     // Every word belongs to exactly one section: contiguous ranges, no gaps,
-    // no overlaps, 300-600 words each.
+    // no overlaps. The opening sections are short (about 60, then 200 words)
+    // so audio starts fast; the rest are 300-600 words each.
     const doc = await getLibraryDocument(docA);
     const sections = (await getDocumentSections(doc)).sort((x, y) => x.wordStart - y.wordStart);
     check(validateSections(sections, doc.words.length).length === 0, validateSections(sections, doc.words.length).join("; "));
     check(sections[0].wordStart === 0 && sections.at(-1).wordEnd === doc.words.length, "doesn't span the document");
     sections.forEach((s, i) => {
       if (i) check(s.wordStart === sections[i - 1].wordEnd, `gap or overlap before section ${i}`);
-      check(s.wordEnd - s.wordStart >= 300 && s.wordEnd - s.wordStart <= 600, `section ${i} has ${s.wordEnd - s.wordStart} words`);
+      const target = OPENING_SECTION_TARGETS[i] ?? SECTION_TARGET_WORDS;
+      const size = s.wordEnd - s.wordStart;
+      check(size >= Math.round((target * 2) / 3) && size <= Math.round((target * 4) / 3), `section ${i} has ${size} words`);
     });
   });
 
