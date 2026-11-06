@@ -8,7 +8,7 @@ Focus Reader reads a document out loud and shows only the word or few words bein
 
 ## Screenshots and demo
 
-A paused document in Education mode, with the library on the left. The page follows the system's light or dark setting, or the Theme button.
+A paused sample document in Education mode, with the library on the left. These screenshots predate the Language tab. The page follows the system's light or dark setting, or the Theme button.
 
 | Light | Dark |
 | --- | --- |
@@ -29,9 +29,15 @@ One small server (`backend/server.py`, Python and Flask) delivers both the page 
 
 **The library.** Each document, its reading position and every audio section already made are saved in the browser's IndexedDB, so reopening a document resumes at the same word and saved sections play without the server or a connection. The server deletes the audio files it generates after an hour; the browser keeps its own copy.
 
-**Education mode.** A tab at the top switches between Normal and Education. Education mode marks up the caption for reading practice: short vowels in pink, welded sounds (-ang, -ing, -ank...) in green, and a thin yellow box around prefixes and suffixes. These come from phonics rules and an English word list (`frontend/words.txt`), not a pronunciation dictionary, so unusual words can be marked wrongly.
+**Reading modes.** Three tabs change how captions are shown:
 
-**Language mode.** A third tab, for people learning English: each caption word shows how to say it underneath, spelled out by sound in syllables, with the stressed one in capitals and cyan ("broccoli" shows BRAH-kuh-lee). American English. The spellings are made from the CMU Pronouncing Dictionary (`frontend/sounds.txt`, built by `tools/make_sounds.py`). Words it lacks (names, numbers) show nothing, and a word with two pronunciations always gets the first ("read" is always "reed").
+- **Normal:** plain highlighting.
+- **Education:** phonics markup.
+- **Language:** shows how to sound out each word, with the stressed syllable marked.
+
+**Education mode.** Education mode marks up the caption for reading practice: short vowels in pink, welded sounds (-ang, -ing, -ank...) in green, and a thin yellow box around prefixes and suffixes. These come from phonics rules and an English word list (`frontend/words.txt`), not a pronunciation dictionary, so unusual words can be marked wrongly.
+
+**Language mode.** Each word's sound-it-out spelling appears underneath it, with the stressed syllable in capitals and cyan ("broccoli" shows BRAH-kuh-lee). The pronunciation guide uses American English. The spellings are made from the CMU Pronouncing Dictionary (`frontend/sounds.txt`, built by `tools/make_sounds.py`). Words it lacks (names, numbers) show nothing, and a word with two pronunciations always gets the first ("read" is always "reed").
 
 **Equations.** When playback reaches an equation in a PDF, it pauses, shows the equation's text for five seconds, and continues.
 
@@ -40,7 +46,7 @@ One small server (`backend/server.py`, Python and Flask) delivers both the page 
 You need:
 
 - **Python 3.10 or newer** (developed and tested with Python 3.14; the code uses 3.10 syntax)
-- **A desktop browser** (developed and tested with Google Chrome)
+- **A web browser.** Built for desktop browsers, developed and tested in Chrome. It also works on phones, which are tested less: tap the words to pause, and the text box appears first until a document loads.
 - **An internet connection** to generate new audio
 
 Copy this repository's clone URL from GitHub's **Code** button and replace `<repository-url>` below. Install the server's requirements in a virtual environment:
