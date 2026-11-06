@@ -10,6 +10,7 @@ from collections import deque
 
 from flask import Flask, jsonify, request, send_from_directory, url_for
 from pdf_cleanup import process_pdf
+from pdf_extract import UnreadablePDF
 from tts_script import OUTPUT_DIR, VOICE, VOICES, synthesize_to_files
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
@@ -245,8 +246,10 @@ def extract_pdf_route():
     try:
         strip = request.form.get("strip_citations", "").lower() in ("1", "true", "yes", "on")
         result = process_pdf(data, strip_citations=strip)
-    except ValueError as error:
-        return jsonify({"error": str(error)}), 400
+    except UnreadablePDF as error:
+        # Only these fixed reasons reach the client; any other error is logged
+        # and answered by the generic 500 handler.
+        return jsonify({"error": error.reason}), 400
     return jsonify(result)
 
 

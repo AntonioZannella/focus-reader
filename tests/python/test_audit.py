@@ -95,12 +95,15 @@ class AuditTests(unittest.TestCase):
             response = self.client.post('/extract-pdf', data=data)
             self.assertEqual(response.status_code, 400)
             self.assertTrue(response.is_json)
-        for error, expected in [(ValueError('Invalid PDF.'), 400), (RuntimeError('private path'), 500)]:
+        unreadable = server.UnreadablePDF('This PDF is password-protected')
+        for error, expected in [(unreadable, 400), (ValueError('private path'), 500), (RuntimeError('private path'), 500)]:
             with patch.object(server, 'process_pdf', side_effect=error), patch.object(server.app.logger, 'exception'):
                 response = self.client.post('/extract-pdf', data={'file': (io.BytesIO(b'%PDF-broken'), 'bad.pdf')})
                 self.assertEqual(response.status_code, expected)
                 self.assertIsInstance(response.get_json()['error'], str)
                 self.assertNotIn(b'private path', response.data)
+                if expected == 400:
+                    self.assertEqual(response.get_json()['error'], 'This PDF is password-protected')
         with patch.object(server, 'MAX_UPLOAD_BYTES', 16), patch.dict(server.app.config, {'MAX_CONTENT_LENGTH': 16}):
             response = self.client.post('/extract-pdf', data=b'x' * 17)
             self.assertEqual(response.status_code, 413)

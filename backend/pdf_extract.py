@@ -266,6 +266,15 @@ def _order_blocks(blocks, columns):
     return ordered
 
 
+class UnreadablePDF(ValueError):
+    """A file that can't be read as a PDF. `reason` is a fixed sentence, safe
+    to show to the person who uploaded it (no library or path details)."""
+
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
 def extract_pdf(source):
     """Extract a PDF's text in reading order.
 
@@ -286,7 +295,7 @@ def extract_pdf(source):
                    page; width/height are the page size in points.
       page_count - number of pages in the file.
 
-    Raises ValueError for a file that isn't a readable PDF, has no pages or
+    Raises UnreadablePDF (a ValueError) for a file that isn't a readable PDF, has no pages or
     needs a password. A scanned PDF (images, no text layer) is not an error:
     it comes back with pages but no words.
     """
@@ -296,14 +305,14 @@ def extract_pdf(source):
         else:
             doc = pymupdf.open(source, filetype="pdf")
     except Exception as error:  # PyMuPDF raises several types for bad files
-        raise ValueError(f"Not a readable PDF: {error}") from error
+        raise UnreadablePDF("Not a readable PDF") from error
 
     with doc:
         if doc.needs_pass:
-            raise ValueError("This PDF is password-protected")
+            raise UnreadablePDF("This PDF is password-protected")
         # a damaged file can open "repaired" with nothing left in it
         if doc.page_count == 0:
-            raise ValueError("This PDF has no readable pages (the file may be damaged)")
+            raise UnreadablePDF("This PDF has no readable pages (the file may be damaged)")
 
         parts = []  # pieces of `text`, joined at the end
         length = 0
