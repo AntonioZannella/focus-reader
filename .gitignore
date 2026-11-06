@@ -27,3 +27,7 @@ Thumbs.db
 .vscode/
 .idea/
 focus-reader-for-ai.md
+
+# Demo source recordings and previews (only the GIF is published)
+docs/demo/*.mov
+docs/demo/*-preview.png

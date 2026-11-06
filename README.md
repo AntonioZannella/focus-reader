@@ -14,7 +14,7 @@ A paused sample document in Education mode, with the library on the left. These 
 | --- | --- |
 | ![Focus Reader in light theme: library sidebar, dark caption stage with a highlighted phrase, playback controls](docs/screenshots/light.jpg) | ![Focus Reader in dark theme: the same view](docs/screenshots/dark.jpg) |
 
-<!-- A short demo recording will be added here. -->
+![Focus Reader demo: captions that follow each spoken word](docs/demo/focus-reader-demo.gif)
 
 ## How it works
 
