@@ -140,4 +140,4 @@ The code is released under the MIT License ([LICENSE](LICENSE)). The word list, 
 
 ## How it was built
 
-This project was built with AI coding tools: the code, tests and documentation were written with Claude Code, following a step-by-step build plan, and each step was reviewed and tested in a real browser and against real PDFs as it was built. The automated test suite was added at the end and checked by deliberately breaking the code to confirm each test fails when it should.
+I directed the design and tested it. The code, tests and documentation were written with Claude Code, following a step-by-step build plan. Each step was reviewed and tested in a real browser and against real PDFs as it was built. The automated test suite was added at the end and checked by deliberately breaking the code to confirm each test fails when it should.
