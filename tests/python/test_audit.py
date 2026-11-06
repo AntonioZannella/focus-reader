@@ -57,3 +57,15 @@ class AuditTests(unittest.TestCase):
             self.assertGreater(limiter.retry_after('two'), 0)
         with patch('server.time.monotonic', return_value=161):
             self.assertEqual(limiter.retry_after('two'), 0)
+
+    def test_cors_allows_only_configured_origin_and_loopback(self):
+        with patch.object(server, 'ALLOWED_ORIGIN', 'https://reader.example'):
+            for origin in ('https://reader.example', 'http://localhost:3000', 'http://127.0.0.1:5001'):
+                response = self.client.options('/synthesize', headers={'Origin': origin})
+                self.assertEqual(response.headers.get('Access-Control-Allow-Origin'), origin)
+                self.assertIn('Origin', response.vary)
+            for origin in ('https://evil.example', 'http://localhost.evil.example', 'null', '*', ''):
+                response = self.client.options('/synthesize', headers={'Origin': origin})
+                self.assertNotIn('Access-Control-Allow-Origin', response.headers)
+        with patch.object(server, 'ALLOWED_ORIGIN', '*'):
+            self.assertNotIn('Access-Control-Allow-Origin', self.client.options('/synthesize', headers={'Origin': '*'}).headers)

@@ -95,6 +95,8 @@ PROTECTED_FILES = {"test.mp3", "test_words.json"}
 # leave that folder.
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 
+ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "").rstrip("/")
+
 app = Flask(__name__)
 # Uploaded PDFs are read in memory; larger requests get a 413 (as JSON, below).
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
@@ -129,7 +131,12 @@ def cleanup_old_outputs(max_age_seconds=OUTPUT_MAX_AGE_SECONDS):
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("Origin", "")
+    configured = ALLOWED_ORIGIN.startswith(("https://", "http://")) and origin == ALLOWED_ORIGIN
+    local = re.fullmatch(r"https?://(?:localhost|127\.0\.0\.1)(?::[0-9]{1,5})?", origin)
+    if origin and (configured or local):
+        response.headers["Access-Control-Allow-Origin"] = origin
+    response.vary.add("Origin")
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     return response
