@@ -81,3 +81,26 @@ class AuditTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 400)
                 self.assertTrue(response.is_json)
             speech.assert_not_called()
+
+    def test_all_http_and_pdf_errors_are_json(self):
+        for method, path, expected in [('get', '/missing-file', 404), ('put', '/synthesize', 405),
+                                       ('get', '/output/missing.mp3', 404)]:
+            response = getattr(self.client, method)(path)
+            self.assertEqual(response.status_code, expected)
+            self.assertIsInstance(response.get_json()['error'], str)
+            if expected == 405:
+                self.assertIn('POST', response.headers['Allow'])
+        for data in ({}, {'file': (io.BytesIO(b'not a pdf'), 'bad.pdf')}):
+            response = self.client.post('/extract-pdf', data=data)
+            self.assertEqual(response.status_code, 400)
+            self.assertTrue(response.is_json)
+        for error, expected in [(ValueError('Invalid PDF.'), 400), (RuntimeError('private path'), 500)]:
+            with patch.object(server, 'process_pdf', side_effect=error), patch.object(server.app.logger, 'exception'):
+                response = self.client.post('/extract-pdf', data={'file': (io.BytesIO(b'%PDF-broken'), 'bad.pdf')})
+                self.assertEqual(response.status_code, expected)
+                self.assertIsInstance(response.get_json()['error'], str)
+                self.assertNotIn(b'private path', response.data)
+        with patch.object(server, 'MAX_UPLOAD_BYTES', 16), patch.dict(server.app.config, {'MAX_CONTENT_LENGTH': 16}):
+            response = self.client.post('/extract-pdf', data=b'x' * 17)
+            self.assertEqual(response.status_code, 413)
+            self.assertTrue(response.is_json)

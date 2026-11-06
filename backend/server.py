@@ -9,6 +9,7 @@ import time
 import uuid
 
 from flask import Flask, jsonify, request, send_from_directory, url_for
+from werkzeug.exceptions import HTTPException
 
 from pdf_cleanup import process_pdf
 from tts_script import OUTPUT_DIR, VOICE, VOICES, synthesize_to_files
@@ -105,6 +106,21 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 @app.errorhandler(413)
 def request_too_large(error):
     return jsonify({"error": f"The upload is too large; the limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB."}), 413
+
+
+@app.errorhandler(HTTPException)
+def http_error(error):
+    # Keep status and protocol headers (for example Allow on a 405).
+    response = error.get_response()
+    response.set_data(app.json.dumps({"error": error.description}))
+    response.content_type = "application/json"
+    return response
+
+
+@app.errorhandler(Exception)
+def unexpected_error(error):
+    app.logger.exception("Unhandled request failure")
+    return jsonify({"error": "An internal error occurred. Please try again."}), 500
 
 
 def cleanup_old_outputs(max_age_seconds=OUTPUT_MAX_AGE_SECONDS):
