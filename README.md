@@ -25,7 +25,7 @@ One small server (`backend/server.py`, Python and Flask) delivers both the page 
   - **Speech with word timestamps:** it turns text into speech with [edge-tts](https://github.com/rany2/edge-tts), which uses Microsoft's online speech service, and records when every word starts and ends. The browser matches those words to the words of your text.
   - **The PDF pipeline:** it extracts a PDF's text in reading order (columns are read one after the other), tags each word with its page, removes headers, footers and page numbers, rejoins words hyphenated across lines, optionally removes citations, and leaves equations out of the spoken text while recording where they are.
 
-**Audio in sections.** A long document is spoken in sections of about 450 words, ending at a paragraph or sentence end where possible. Reading starts as soon as the first section is ready, and the next one is prepared while you listen, one request at a time. Jumping to a distant page prepares only the section you jump to.
+**Audio in sections.** A long document is spoken in sections of about 450 words, ending at a paragraph or sentence end where possible. The first two are shorter (about 60, then 200 words) so the audio starts within a couple of seconds. Reading starts as soon as the first section is ready, and the next one is prepared while you listen, one request at a time. Jumping to a distant page prepares only the section you jump to.
 
 **The library.** Each document, its reading position and every audio section already made are saved in the browser's IndexedDB, so reopening a document resumes at the same word and saved sections play without the server or a connection. The server deletes the audio files it generates after an hour; the browser keeps its own copy.
 
@@ -46,7 +46,7 @@ You need:
 Get the code and install the server's requirements in a virtual environment:
 
 ```bash
-git clone <this repository's URL> focus-reader
+git clone https://github.com/AntonioZannella/focus-reader.git
 cd focus-reader/backend
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
