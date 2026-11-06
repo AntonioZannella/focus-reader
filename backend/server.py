@@ -88,7 +88,7 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 OUTPUT_MAX_AGE_SECONDS = 60 * 60
 # Only files this server generates (uuid4 hex + suffix) are ever deleted, so
 # test.mp3 / test_words.json and anything else placed there are left alone.
-GENERATED_FILE_PATTERN = re.compile(r"^[0-9a-f]{32}(\.mp3|_words\.json)$")
+GENERATED_FILE_PATTERN = re.compile(r"[0-9a-f]{32}(\.mp3|_words\.json)")
 PROTECTED_FILES = {"test.mp3", "test_words.json"}
 # The page and the files it loads (alignment.js, words.txt...) are served from
 # frontend/, found from this file's location so the server works whichever
@@ -129,7 +129,7 @@ def cleanup_old_outputs(max_age_seconds=OUTPUT_MAX_AGE_SECONDS):
     cutoff = time.time() - max_age_seconds
     removed = 0
     for name in os.listdir(OUTPUT_DIR):
-        if name in PROTECTED_FILES or not GENERATED_FILE_PATTERN.match(name):
+        if name in PROTECTED_FILES or not GENERATED_FILE_PATTERN.fullmatch(name):
             continue
         path = os.path.join(OUTPUT_DIR, name)
         try:

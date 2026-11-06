@@ -141,3 +141,13 @@ class AuditTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(len(captured.records), 2)
                 self.assertTrue(all(record.exc_info for record in captured.records))
+
+    def test_cleanup_requires_a_complete_generated_filename_match(self):
+        names = ['a' * 32 + '.mp3', 'b' * 32 + '_words.json',
+                 'c' * 32 + '.mp3\n', 'd' * 32 + '_words.json\n', 'test.mp3']
+        for name in names:
+            path = Path(self.tmp.name) / name
+            path.write_bytes(b'fixture')
+            os.utime(path, (0, 0))
+        self.assertEqual(server.cleanup_old_outputs(), 2)
+        self.assertEqual(sorted(p.name for p in Path(self.tmp.name).iterdir()), sorted(names[2:]))
