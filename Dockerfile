@@ -1,10 +1,9 @@
-# Focus Reader in a container (Render, Cloud Run, Hugging Face). One gunicorn process
-# serves the page and the API on port 7860.
-#   docker build -t focus-reader .
-#   docker run --rm -p 7860:7860 focus-reader      then open http://localhost:7860/
+# Focus Reader in a container. Render builds this image from render.yaml on
+# every push to main and sets PORT itself; one gunicorn process serves the page
+# and the API on that port. The README shows how to build and run it locally.
 FROM python:3.12.16-slim-trixie
 
-# Hugging Face runs the container as uid 1000, not root
+# run as an unprivileged user, not root
 RUN useradd --create-home --uid 1000 user
 USER user
 ENV HOME=/home/user \
@@ -27,7 +26,8 @@ RUN mkdir -p backend/output
 EXPOSE 7860
 # 1 worker with 4 threads suits the free CPU tier; synthesizing a section or
 # extracting a large PDF can take a while, hence the 120 s timeout.
-# gunicorn binds 0.0.0.0:$PORT on its own when PORT is set (7860, above), so
-# the JSON form needs no shell: gunicorn is the container's main process and
-# receives stop signals directly.
-CMD ["gunicorn", "--chdir", "backend", "--workers", "1", "--threads", "4", "--timeout", "120", "server:app"]
+# gunicorn binds 0.0.0.0:$PORT on its own when PORT is set (Render sets it;
+# the ENV above is the fallback), so the JSON form needs no shell: gunicorn is
+# the container's main process and receives stop signals directly.
+# --access-logfile - writes one line per request to stdout, into Render's logs.
+CMD ["gunicorn", "--chdir", "backend", "--workers", "1", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "server:app"]

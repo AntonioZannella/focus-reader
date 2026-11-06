@@ -14,8 +14,8 @@ from pdf_extract import UnreadablePDF
 from tts_script import OUTPUT_DIR, VOICE, VOICES, synthesize_to_files
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
-# 5001 locally (python backend/server.py); a host such as Hugging Face sets
-# PORT itself (7860 in the Docker image, where gunicorn binds it instead).
+# 5001 locally (python backend/server.py). On Render the Docker image runs
+# gunicorn, which binds the PORT that Render sets, so this value isn't used.
 PORT = int(os.environ.get("PORT", "5001"))
 # The page sends sections of at most ~600 words (a few thousand characters),
 # so anything longer than this isn't the app and is refused: the site is
