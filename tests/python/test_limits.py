@@ -100,3 +100,30 @@ def test_stalled_speech_service_times_out_with_a_502(tmp_path, monkeypatch):
     response = client.get(f"/voice-sample/{server.VOICE}")
     assert response.status_code == 502
     assert list(tmp_path.rglob("*.partial*")) == []
+
+
+def test_limiter_evicts_the_least_recently_seen_client(monkeypatch):
+    limiter = server.SpeechLimiter(limit=1, max_clients=2)
+    monkeypatch.setattr(server.time, "monotonic", lambda: 100.0)
+    assert limiter.retry_after("a") == 0
+    assert limiter.retry_after("b") == 0
+    assert limiter.retry_after("a") > 0  # "a" is now the most recently seen
+    assert limiter.retry_after("c") == 0  # table full: "b" is forgotten
+    assert list(limiter.clients) == ["a", "c"]
+    assert limiter.retry_after("a") > 0  # an active limit survives eviction of others
+
+
+def test_limiter_prunes_idle_clients_once_per_window(monkeypatch):
+    limiter = server.SpeechLimiter(limit=5, window=60)
+    now = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
+    limiter.retry_after("a")  # first call prunes and sets the next prune to 160
+    now[0] = 159.0
+    limiter.retry_after("b")
+    now[0] = 160.5  # "a" is idle now, but the table is only scanned when due
+    assert limiter.next_prune == 160.0
+    limiter.retry_after("b")
+    assert set(limiter.clients) == {"b"} and limiter.next_prune == 220.5
+    now[0] = 200.0  # between prunes, idle-or-not entries stay put
+    limiter.retry_after("c")
+    assert set(limiter.clients) == {"b", "c"} and limiter.next_prune == 220.5

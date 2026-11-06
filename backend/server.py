@@ -6,7 +6,7 @@ import re
 import threading
 import time
 import uuid
-from collections import deque
+from collections import OrderedDict, deque
 
 from flask import Flask, jsonify, request, send_from_directory, url_for
 from pdf_cleanup import process_pdf
@@ -34,24 +34,36 @@ SYNTHESIS_TIMEOUT_SECONDS = 45
 class SpeechLimiter:
     # In-memory counts are per process and reset on restart. Multiple workers
     # or instances need a shared store before this is a deployment-wide limit.
+    # Clients are kept least recently seen first; past max_clients the oldest
+    # is forgotten (its quota starts over), so a flood of new addresses can
+    # fill the table but never locks everyone else out.
     def __init__(self, limit=SPEECH_REQUESTS_PER_MINUTE, window=60, max_clients=10_000):
         self.limit, self.window, self.max_clients = limit, window, max_clients
-        self.clients = {}
+        self.clients = OrderedDict()
+        self.next_prune = 0.0
         self.lock = threading.Lock()
+
+    def prune(self, now):
+        # A full pass over the table, at most once per window rather than on
+        # every request: drops clients with no request inside the window.
+        for key in [key for key, times in self.clients.items() if not times or times[-1] <= now - self.window]:
+            del self.clients[key]
+        self.next_prune = now + self.window
 
     def retry_after(self, client):
         now = time.monotonic()
         with self.lock:
-            for key, times in list(self.clients.items()):
-                while times and times[0] <= now - self.window:
-                    times.popleft()
-                if not times:
-                    del self.clients[key]
-            if client not in self.clients:
-                if len(self.clients) >= self.max_clients:
-                    return self.window  # Fail closed rather than evict an active limit.
-                self.clients[client] = deque()
-            times = self.clients[client]
+            if now >= self.next_prune:
+                self.prune(now)
+            times = self.clients.get(client)
+            if times is None:
+                times = self.clients[client] = deque()
+                if len(self.clients) > self.max_clients:
+                    self.clients.popitem(last=False)
+            else:
+                self.clients.move_to_end(client)
+            while times and times[0] <= now - self.window:
+                times.popleft()
             if len(times) >= self.limit:
                 return max(1, math.ceil(times[0] + self.window - now))
             times.append(now)

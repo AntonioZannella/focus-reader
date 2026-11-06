@@ -55,7 +55,10 @@ class AuditTests(unittest.TestCase):
             with ThreadPoolExecutor(max_workers=8) as pool:
                 results = list(pool.map(lambda _: limiter.retry_after('one'), range(8)))
             self.assertEqual(results.count(0), 2)
-            self.assertGreater(limiter.retry_after('two'), 0)
+            self.assertGreater(limiter.retry_after('one'), 0)
+            # a full table evicts the least recently seen client, never refuses a new one
+            self.assertEqual(limiter.retry_after('two'), 0)
+            self.assertEqual(list(limiter.clients), ['two'])
         with patch('server.time.monotonic', return_value=161):
             self.assertEqual(limiter.retry_after('two'), 0)
 
