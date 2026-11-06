@@ -311,6 +311,11 @@
     .main-column {
       gap: 16px;
     }
+    /* With nothing loaded yet (no progress bar), the text box comes first,
+       so a phone opens on where to paste instead of an empty stage. */
+    .main-column:has(.reading-progress[hidden]) > .panel {
+      order: -1;
+    }
   }
 
   /* Player card: the stage on top, the controls below, like a video player. */
