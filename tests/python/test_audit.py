@@ -166,3 +166,9 @@ class AuditTests(unittest.TestCase):
                 self.assertIn('128 KiB', response.get_json()['error'])
             self.assertEqual(speech.call_count, 1)
         self.assertEqual(server.app.config['MAX_CONTENT_LENGTH'], 25 * 1024 * 1024)
+
+    def test_container_base_pins_python_patch_and_distribution(self):
+        dockerfile = Path(__file__).resolve().parents[2] / 'Dockerfile'
+        bases = [line.split()[1] for line in dockerfile.read_text().splitlines() if line.startswith('FROM ')]
+        self.assertEqual(len(bases), 1)
+        self.assertRegex(bases[0], r'\Apython:3\.12\.[0-9]+-slim-(bookworm|trixie)\Z')

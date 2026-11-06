@@ -2,7 +2,7 @@
 # serves the page and the API on port 7860.
 #   docker build -t focus-reader .
 #   docker run --rm -p 7860:7860 focus-reader      then open http://localhost:7860/
-FROM python:3.12-slim
+FROM python:3.12.16-slim-trixie
 
 # Hugging Face runs the container as uid 1000, not root
 RUN useradd --create-home --uid 1000 user
