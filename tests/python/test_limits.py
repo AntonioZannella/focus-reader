@@ -82,3 +82,21 @@ def test_concurrent_synthesis_in_threads(fake_synthesis):
     assert errors == []
     assert results == [200] * 8
     assert len(fake_synthesis) == 8
+
+
+def test_stalled_speech_service_times_out_with_a_502(tmp_path, monkeypatch):
+    # a service that accepts the connection and then never answers: the
+    # request gives up after SYNTHESIS_TIMEOUT_SECONDS instead of hanging
+    async def stalled(text, mp3_path, words_path, voice=None):
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(server, "OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr(server, "synthesize_to_files", stalled)
+    monkeypatch.setattr(server, "SYNTHESIS_TIMEOUT_SECONDS", 0.1)
+    client = server.app.test_client()
+    response = client.post("/synthesize", json={"text": "Hello."})
+    assert response.status_code == 502
+    assert "speech service" in response.get_json()["error"]
+    response = client.get(f"/voice-sample/{server.VOICE}")
+    assert response.status_code == 502
+    assert list(tmp_path.rglob("*.partial*")) == []

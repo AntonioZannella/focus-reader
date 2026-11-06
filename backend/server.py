@@ -26,6 +26,9 @@ MAX_SYNTHESIS_BODY_BYTES = 128 * 1024
 SPEECH_REQUESTS_PER_MINUTE = int(os.environ.get("SPEECH_REQUESTS_PER_MINUTE", "30"))
 if SPEECH_REQUESTS_PER_MINUTE < 1:
     raise ValueError("SPEECH_REQUESTS_PER_MINUTE must be positive")
+# A stalled speech service must not hold a worker thread until gunicorn's
+# 120 s timeout kills the whole worker: give up on one call after this long.
+SYNTHESIS_TIMEOUT_SECONDS = 45
 
 
 class SpeechLimiter:
@@ -174,6 +177,15 @@ def add_cors_headers(response):
     return response
 
 
+def run_synthesis(text, mp3_path, words_path, voice):
+    # asyncio.run makes a new event loop for this call and closes it after, so
+    # it's safe in gunicorn's worker threads (none of them has a loop running).
+    # wait_for raises TimeoutError once the whole call, retries included, runs
+    # past the limit.
+    return asyncio.run(asyncio.wait_for(
+        synthesize_to_files(text, mp3_path, words_path, voice=voice), SYNTHESIS_TIMEOUT_SECONDS))
+
+
 @app.route("/synthesize", methods=["POST", "OPTIONS"])
 def synthesize():
     if request.method == "OPTIONS":
@@ -205,11 +217,9 @@ def synthesize():
     mp3_path = os.path.join(OUTPUT_DIR, mp3_filename)
     words_path = os.path.join(OUTPUT_DIR, words_filename)
 
-    # asyncio.run makes a new event loop for this call and closes it after, so
-    # it's safe in gunicorn's worker threads (none of them has a loop running)
     try:
-        words = asyncio.run(synthesize_to_files(text, mp3_path, words_path, voice=voice))
-    except Exception:  # every retry failed: the speech service is down or refusing
+        words = run_synthesis(text, mp3_path, words_path, voice)
+    except Exception:  # every attempt failed or timed out: the service is down or refusing
         app.logger.exception("Speech synthesis failed for %d characters", len(text))
         for path in (mp3_path, words_path):
             try:
@@ -277,7 +287,7 @@ def voice_sample(voice):
         # at once never serve a half-written file
         partial = os.path.join(sample_dir, f"{uuid.uuid4().hex}.partial")
         try:
-            asyncio.run(synthesize_to_files(f"Hi, I'm {VOICES[voice]}.", partial, partial + ".json", voice=voice))
+            run_synthesis(f"Hi, I'm {VOICES[voice]}.", partial, partial + ".json", voice)
             os.replace(partial, os.path.join(sample_dir, filename))
         except Exception:
             app.logger.exception("Voice sample for %s failed", voice)
