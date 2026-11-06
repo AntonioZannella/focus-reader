@@ -4,7 +4,7 @@
 
 Focus Reader reads a document out loud and shows only the word or few words being spoken, in large caption-style text on an otherwise empty screen. It's for people who lose their place or their focus when a page is full of text, even while listening along to an audiobook: instead of following the voice across a page, you only ever see what is being said right now. You can paste text, upload a `.txt` file or upload a PDF (including two-column research papers), and every document is saved in a library in your browser with its own reading position. [WHAT-IT-DOES.md](WHAT-IT-DOES.md) describes the features in plain language.
 
-**Privacy:** there are no accounts and no tracking. Your documents and library stay in your own browser. To make audio, the text being read is sent to Microsoft's online speech service (through edge-tts); the server keeps the audio files for an hour and then deletes them.
+**Privacy:** there are no accounts. Your saved library, reading positions and cached audio live in your browser. Uploaded PDFs are sent to the app server for text extraction; text sections are sent through that server to Microsoft's online speech service via edge-tts. The hosting provider keeps request logs, so this is not a no-logging service. Generated audio and word-timing files are stored temporarily on the server. Cleanup removes files older than one hour when a new synthesis request arrives; this is not a guaranteed one-hour deletion deadline. Browser copies remain until you delete them or clear site data.
 
 ## Screenshots and demo
 
@@ -27,7 +27,7 @@ One small server (`backend/server.py`, Python and Flask) delivers both the page 
 
 **Audio in sections.** A long document is spoken in sections of about 450 words, ending at a paragraph or sentence end where possible. The first two are shorter (about 60, then 200 words) so the audio starts within a couple of seconds. Reading starts as soon as the first section is ready, and the next one is prepared while you listen, one request at a time. Jumping to a distant page prepares only the section you jump to.
 
-**The library.** Each document, its reading position and every audio section already made are saved in the browser's IndexedDB, so reopening a document resumes at the same word and saved sections play without the server or a connection. The server deletes the audio files it generates after an hour; the browser keeps its own copy.
+**The library.** Each document, its reading position and every audio section already made are saved in the browser's IndexedDB, so reopening a document resumes at the same word and saved sections play without the server or a connection. The browser keeps its own copy independently of server cleanup.
 
 **Reading modes.** Three tabs change how captions are shown:
 
@@ -85,7 +85,7 @@ docker build -t focus-reader .
 docker run --rm -p 7860:7860 focus-reader
 ```
 
-Then open <http://localhost:7860/>. Generated audio lives inside the container and is deleted after an hour, as on a local run; each reader's library stays in their own browser.
+Then open <http://localhost:7860/>. Generated audio lives inside the container and is eligible for cleanup after one hour, as on a local run; cleanup runs on new synthesis requests. Each reader's library stays in their own browser.
 
 To keep a public copy from being misused, the server refuses text over 10,000 characters per request (the page sends sections of a few thousand at most) and PDFs over 25 MB, with a message saying why.
 
