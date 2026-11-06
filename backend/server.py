@@ -9,7 +9,7 @@ import time
 import uuid
 
 from flask import Flask, jsonify, request, send_from_directory, url_for
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from pdf_cleanup import process_pdf
 from tts_script import OUTPUT_DIR, VOICE, VOICES, synthesize_to_files
@@ -21,6 +21,8 @@ PORT = int(os.environ.get("PORT", "5001"))
 # so anything longer than this isn't the app and is refused: the site is
 # public and each request costs a call to the speech service.
 MAX_SYNTHESIS_CHARS = 10_000
+# Fits even 10,000 JSON-escaped non-BMP characters, plus the small envelope.
+MAX_SYNTHESIS_BODY_BYTES = 128 * 1024
 SPEECH_REQUESTS_PER_MINUTE = int(os.environ.get("SPEECH_REQUESTS_PER_MINUTE", "30"))
 if SPEECH_REQUESTS_PER_MINUTE < 1:
     raise ValueError("SPEECH_REQUESTS_PER_MINUTE must be positive")
@@ -103,8 +105,22 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 
+@app.before_request
+def limit_synthesis_body():
+    if request.endpoint == "synthesize" and request.method == "POST":
+        # Read at most one extra byte: an unknown-length stream can otherwise
+        # be truncated to a valid JSON prefix by Werkzeug's LimitedStream.
+        request.max_content_length = MAX_SYNTHESIS_BODY_BYTES + 1
+        if request.content_length is not None and request.content_length > MAX_SYNTHESIS_BODY_BYTES:
+            raise RequestEntityTooLarge()
+        if len(request.get_data(cache=True)) > MAX_SYNTHESIS_BODY_BYTES:
+            raise RequestEntityTooLarge()
+
+
 @app.errorhandler(413)
 def request_too_large(error):
+    if request.endpoint == "synthesize":
+        return jsonify({"error": f"The request is too large; the limit is {MAX_SYNTHESIS_BODY_BYTES // 1024} KiB."}), 413
     return jsonify({"error": f"The upload is too large; the limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB."}), 413
 
 

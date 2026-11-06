@@ -151,3 +151,18 @@ class AuditTests(unittest.TestCase):
             os.utime(path, (0, 0))
         self.assertEqual(server.cleanup_old_outputs(), 2)
         self.assertEqual(sorted(p.name for p in Path(self.tmp.name).iterdir()), sorted(names[2:]))
+
+    def test_synthesis_body_limit_applies_before_speech_and_without_content_length(self):
+        body = b'{"text":"Hello"}'
+        exact = body + b' ' * (server.MAX_SYNTHESIS_BODY_BYTES - len(body))
+        with patch.object(server, 'synthesize_to_files', new=AsyncMock(return_value=[])) as speech:
+            response = self.client.post('/synthesize', data=exact, content_type='application/json')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(speech.call_count, 1)
+            for overrides in ({}, {'wsgi.input_terminated': True, 'CONTENT_LENGTH': ''}):
+                response = self.client.post('/synthesize', data=exact + b' ', content_type='application/json',
+                                            environ_overrides=overrides)
+                self.assertEqual(response.status_code, 413)
+                self.assertIn('128 KiB', response.get_json()['error'])
+            self.assertEqual(speech.call_count, 1)
+        self.assertEqual(server.app.config['MAX_CONTENT_LENGTH'], 25 * 1024 * 1024)
