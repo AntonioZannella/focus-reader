@@ -34,3 +34,18 @@ def test_cleanup_deletes_only_old_generated_files(tmp_path, monkeypatch):
         f"{new_id}.mp3", f"{new_id}_words.json",
         "test.mp3", "test_words.json", "fixture_pages.pdf", "notes.txt",
     ])
+
+
+def test_requests_clean_up_at_most_once_a_minute(monkeypatch):
+    calls = []
+    now = [1000.0]
+    monkeypatch.setattr(server, "cleanup_old_outputs", lambda: calls.append(now[0]))
+    monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(server, "next_cleanup", 0.0)
+    server.cleanup_if_due()
+    now[0] += 59
+    server.cleanup_if_due()
+    assert calls == [1000.0]
+    now[0] += 1
+    server.cleanup_if_due()
+    assert calls == [1000.0, 1060.0]

@@ -107,6 +107,9 @@ OUTPUT_MAX_AGE_SECONDS = 60 * 60
 # test.mp3 / test_words.json and anything else placed there are left alone.
 GENERATED_FILE_PATTERN = re.compile(r"[0-9a-f]{32}(\.mp3|_words\.json)")
 PROTECTED_FILES = {"test.mp3", "test_words.json"}
+# Listing the folder on every request is wasted work: files only need to go
+# within a minute or so of turning an hour old.
+CLEANUP_INTERVAL_SECONDS = 60
 # The page and the files it loads (alignment.js, words.txt...) are served from
 # frontend/, found from this file's location so the server works whichever
 # folder it's started from. send_from_directory refuses any path that would
@@ -176,6 +179,24 @@ def cleanup_old_outputs(max_age_seconds=OUTPUT_MAX_AGE_SECONDS):
     return removed
 
 
+cleanup_lock = threading.Lock()
+next_cleanup = 0.0
+
+
+def cleanup_if_due():
+    """Run cleanup_old_outputs() at most once per CLEANUP_INTERVAL_SECONDS;
+    a request arriving while another thread is cleaning up skips it."""
+    global next_cleanup
+    now = time.monotonic()
+    if now < next_cleanup or not cleanup_lock.acquire(blocking=False):
+        return
+    try:
+        next_cleanup = now + CLEANUP_INTERVAL_SECONDS
+        cleanup_old_outputs()
+    finally:
+        cleanup_lock.release()
+
+
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin", "")
@@ -222,7 +243,7 @@ def synthesize():
         return limited
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    cleanup_old_outputs()
+    cleanup_if_due()
     request_id = uuid.uuid4().hex
     mp3_filename = f"{request_id}.mp3"
     words_filename = f"{request_id}_words.json"
