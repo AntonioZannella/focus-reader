@@ -69,3 +69,15 @@ class AuditTests(unittest.TestCase):
                 self.assertNotIn('Access-Control-Allow-Origin', response.headers)
         with patch.object(server, 'ALLOWED_ORIGIN', '*'):
             self.assertNotIn('Access-Control-Allow-Origin', self.client.options('/synthesize', headers={'Origin': '*'}).headers)
+
+    def test_non_object_bodies_and_non_string_voices_return_400(self):
+        with patch.object(server, 'synthesize_to_files') as speech:
+            for body in ([], [1], None, 'text', 7, True):
+                response = self.client.post('/synthesize', data=json.dumps(body), content_type='application/json')
+                self.assertEqual(response.status_code, 400)
+                self.assertTrue(response.is_json)
+            for voice in ([], {}, None, 7, True):
+                response = self.client.post('/synthesize', json={'text': 'Hello', 'voice': voice})
+                self.assertEqual(response.status_code, 400)
+                self.assertTrue(response.is_json)
+            speech.assert_not_called()

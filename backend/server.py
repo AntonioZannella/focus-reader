@@ -147,11 +147,15 @@ def synthesize():
     if request.method == "OPTIONS":
         return ""
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "JSON body must be an object"}), 400
     text = data.get("text")
     if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "JSON body must include a non-empty 'text' string"}), 400
     voice = data.get("voice", VOICE)
+    if not isinstance(voice, str):
+        return jsonify({"error": "voice must be a string"}), 400
     if voice not in VOICES:
         return jsonify({"error": f"Unknown voice {voice!r}"}), 400
     if len(text) > MAX_SYNTHESIS_CHARS:
