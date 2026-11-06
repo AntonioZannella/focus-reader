@@ -104,3 +104,23 @@ class AuditTests(unittest.TestCase):
             response = self.client.post('/extract-pdf', data=b'x' * 17)
             self.assertEqual(response.status_code, 413)
             self.assertTrue(response.is_json)
+
+    def test_speech_and_cleanup_failures_log_tracebacks(self):
+        with patch.object(server, 'synthesize_to_files', new=AsyncMock(side_effect=RuntimeError('speech failed'))):
+            with patch('server.os.remove', side_effect=PermissionError('cannot remove')):
+                with self.assertLogs(server.app.logger, level='ERROR') as captured:
+                    response = self.client.post('/synthesize', json={'text': 'Hello'})
+                self.assertEqual(response.status_code, 502)
+                self.assertEqual(len(captured.records), 3)
+                self.assertTrue(all(record.exc_info for record in captured.records))
+            with self.assertLogs(server.app.logger, level='ERROR') as captured:
+                response = self.client.get('/voice-sample/' + server.VOICE)
+            self.assertEqual(response.status_code, 502)
+            self.assertTrue(captured.records[0].exc_info)
+        with patch('server.os.listdir', return_value=['a' * 32 + '.mp3']), \
+             patch('server.os.path.isfile', return_value=True), \
+             patch('server.os.path.getmtime', return_value=0), \
+             patch('server.os.remove', side_effect=PermissionError('cannot remove')):
+            with self.assertLogs(server.app.logger, level='ERROR') as captured:
+                self.assertEqual(server.cleanup_old_outputs(), 0)
+            self.assertTrue(captured.records[0].exc_info)

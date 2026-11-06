@@ -138,8 +138,8 @@ def cleanup_old_outputs(max_age_seconds=OUTPUT_MAX_AGE_SECONDS):
                 removed += 1
         except FileNotFoundError:
             pass  # removed by a concurrent request's cleanup
-        except OSError as error:
-            app.logger.warning("Could not delete old output %s: %s", name, error)
+        except OSError:
+            app.logger.exception("Could not delete old output %s", name)
     if removed:
         app.logger.info("Deleted %d generated file(s) older than %ds", removed, max_age_seconds)
     return removed
@@ -193,13 +193,15 @@ def synthesize():
     # it's safe in gunicorn's worker threads (none of them has a loop running)
     try:
         words = asyncio.run(synthesize_to_files(text, mp3_path, words_path, voice=voice))
-    except Exception as error:  # every retry failed: the speech service is down or refusing
-        app.logger.error("Speech synthesis failed for %d characters: %s: %s", len(text), type(error).__name__, error)
+    except Exception:  # every retry failed: the speech service is down or refusing
+        app.logger.exception("Speech synthesis failed for %d characters", len(text))
         for path in (mp3_path, words_path):
             try:
                 os.remove(path)
+            except FileNotFoundError:
+                pass  # The service may fail before creating either file.
             except OSError:
-                pass
+                app.logger.exception("Could not remove failed synthesis output %s", path)
         return jsonify({"error": "The speech service didn't respond. Check your internet connection and try again."}), 502
 
     # a relative link ("/output/<id>.mp3"): an absolute http:// one would be
@@ -259,8 +261,8 @@ def voice_sample(voice):
         try:
             asyncio.run(synthesize_to_files(f"Hi, I'm {VOICES[voice]}.", partial, partial + ".json", voice=voice))
             os.replace(partial, os.path.join(sample_dir, filename))
-        except Exception as error:
-            app.logger.error("Voice sample for %s failed: %s: %s", voice, type(error).__name__, error)
+        except Exception:
+            app.logger.exception("Voice sample for %s failed", voice)
             return jsonify({"error": "The speech service didn't respond."}), 502
         finally:
             for leftover in (partial, partial + ".json"):
