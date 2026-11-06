@@ -4,11 +4,11 @@
 
 Focus Reader reads a document out loud and shows only the word or few words being spoken, in large caption-style text on an otherwise empty screen. It's for people who lose their place or their focus when a page is full of text, even while listening along to an audiobook: instead of following the voice across a page, you only ever see what is being said right now. You can paste text, upload a `.txt` file or upload a PDF (including two-column research papers), and every document is saved in a library in your browser with its own reading position. [WHAT-IT-DOES.md](WHAT-IT-DOES.md) describes the features in plain language.
 
-**Privacy:** there are no accounts and no tracking. Your documents and library stay in your own browser. To make audio, the text being read is sent to Microsoft's online speech service (through edge-tts); the server keeps the audio files for an hour and then deletes them.
+**Privacy:** there are no accounts. Your saved library, reading positions and cached audio live in your browser. Uploaded PDFs are sent to the app server for text extraction; text sections are sent through that server to Microsoft's online speech service via edge-tts. The hosting provider keeps request logs, so this is not a no-logging service. Generated audio and word-timing files are stored temporarily on the server. Cleanup removes files older than one hour when a new synthesis request arrives; this is not a guaranteed one-hour deletion deadline. Browser copies remain until you delete them or clear site data.
 
 ## Screenshots and demo
 
-A paused document in Education mode, with the library on the left. The page follows the system's light or dark setting, or the Theme button.
+A paused sample document in Education mode, with the library on the left. These screenshots predate the Language tab. The page follows the system's light or dark setting, or the Theme button.
 
 | Light | Dark |
 | --- | --- |
@@ -25,28 +25,44 @@ One small server (`backend/server.py`, Python and Flask) delivers both the page 
   - **Speech with word timestamps:** it turns text into speech with [edge-tts](https://github.com/rany2/edge-tts), which uses Microsoft's online speech service, and records when every word starts and ends. The browser matches those words to the words of your text.
   - **The PDF pipeline:** it extracts a PDF's text in reading order (columns are read one after the other), tags each word with its page, removes headers, footers and page numbers, rejoins words hyphenated across lines, optionally removes citations, and leaves equations out of the spoken text while recording where they are.
 
-**Audio in sections.** A long document is spoken in sections of about 450 words, ending at a paragraph or sentence end where possible. The first two are shorter (about 60, then 200 words) so the audio starts within a couple of seconds. Reading starts as soon as the first section is ready, and the next one is prepared while you listen, one request at a time. Jumping to a distant page prepares only the section you jump to.
+**Audio in sections.** A long document is spoken in sections of about 450 words, ending at a paragraph or sentence end where possible. The first two sections target about 60, then 200 words. Reading starts as soon as the first section is ready, and the next one is prepared while you listen, one request at a time. Jumping to a distant page prepares only the section you jump to.
 
-**The library.** Each document, its reading position and every audio section already made are saved in the browser's IndexedDB, so reopening a document resumes at the same word and saved sections play without the server or a connection. The server deletes the audio files it generates after an hour; the browser keeps its own copy.
+**Historical startup measurements.** Earlier tests using a 450-word first section recorded about 7–10 seconds to prepare the first audio in several runs. A 765-page book took 5.6 seconds for PDF extraction, followed by 9.7 seconds for the first audio section. Only that first section was generated before playback; later sections were prepared in the background. These measurements date from September–October 2026 and predate the shorter opening sections now in the code. They are not a current speed guarantee: another run took 15.6 seconds for its first section, and hosting cold starts add delay.
 
-**Education mode.** A tab at the top switches between Normal and Education. Education mode marks up the caption for reading practice: short vowels in pink, welded sounds (-ang, -ing, -ank...) in green, and a thin yellow box around prefixes and suffixes. These come from phonics rules and an English word list (`frontend/words.txt`), not a pronunciation dictionary, so unusual words can be marked wrongly.
+**The library.** Each document, its reading position and every audio section already made are saved in the browser's IndexedDB, so reopening a document resumes at the same word and saved sections play without the server or a connection. The browser keeps its own copy independently of server cleanup.
 
-**Language mode.** A third tab, for people learning English: each caption word shows how to say it underneath, spelled out by sound in syllables, with the stressed one in capitals and cyan ("broccoli" shows BRAH-kuh-lee). American English. The spellings are made from the CMU Pronouncing Dictionary (`frontend/sounds.txt`, built by `tools/make_sounds.py`). Words it lacks (names, numbers) show nothing, and a word with two pronunciations always gets the first ("read" is always "reed").
+**Reading modes.** Three tabs change how captions are shown:
+
+- **Normal:** plain highlighting.
+- **Education:** phonics markup.
+- **Language:** shows how to sound out each word, with the stressed syllable marked.
+
+**Education mode.** Education mode marks up the caption for reading practice: short vowels in pink, welded sounds (-ang, -ing, -ank...) in green, and a thin yellow box around prefixes and suffixes. These come from phonics rules and an English word list (`frontend/words.txt`), not a pronunciation dictionary, so unusual words can be marked wrongly.
+
+**Language mode.** Each word's sound-it-out spelling appears underneath it, with the stressed syllable in capitals and cyan ("broccoli" shows BRAH-kuh-lee). The pronunciation guide uses American English. The spellings are made from the CMU Pronouncing Dictionary (`frontend/sounds.txt`, built by `tools/make_sounds.py`). Words it lacks (names, numbers) show nothing, and a word with two pronunciations always gets the first ("read" is always "reed").
 
 **Equations.** When playback reaches an equation in a PDF, it pauses, shows the equation's text for five seconds, and continues.
+
+## Architecture and trade-offs
+
+The browser handles captions, playback and the IndexedDB library. A Python/Flask server serves the page, extracts PDF text and calls edge-tts for audio and word timings. The container runs one Gunicorn worker with four threads.
+
+- **One worker:** the hosted app runs as one server process that handles up to four requests at once. Most of each speech request is waiting on Microsoft's speech service, so four at once is plenty for this app. One process uses little memory on Render's free tier. If an in-process rate limiter is used, keeping one worker also keeps its request counters together; this version does not yet include that limiter.
+- **edge-tts:** free, natural voices, and it reports when every word starts and ends, which the word highlighting depends on.
+- **If edge-tts changes or breaks:** it is unofficial and has already needed one update. The server tries up to three times, then returns a clear error: "The speech service didn't respond." There is no alternate speech provider built in. Audio already saved in the library still plays offline.
 
 ## Setup
 
 You need:
 
 - **Python 3.10 or newer** (developed and tested with Python 3.14; the code uses 3.10 syntax)
-- **A desktop browser** (developed and tested with Google Chrome)
+- **A web browser.** Built for desktop browsers, developed and tested in Chrome. It also works on phones, which are tested less: tap the words to pause, and the text box appears first until a document loads.
 - **An internet connection** to generate new audio
 
-Get the code and install the server's requirements in a virtual environment:
+Copy this repository's clone URL from GitHub's **Code** button and replace `<repository-url>` below. Install the server's requirements in a virtual environment:
 
 ```bash
-git clone https://github.com/AntonioZannella/focus-reader.git
+git clone <repository-url> focus-reader
 cd focus-reader/backend
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
@@ -79,7 +95,7 @@ docker build -t focus-reader .
 docker run --rm -p 7860:7860 focus-reader
 ```
 
-Then open <http://localhost:7860/>. Generated audio lives inside the container and is deleted after an hour, as on a local run; each reader's library stays in their own browser.
+Then open <http://localhost:7860/>. Generated audio lives inside the container and is eligible for cleanup after one hour, as on a local run; cleanup runs on new synthesis requests. Each reader's library stays in their own browser.
 
 To keep a public copy from being misused, the server refuses text over 10,000 characters per request (the page sends sections of a few thousand at most) and PDFs over 25 MB, with a message saying why.
 
@@ -110,7 +126,7 @@ This runs three parts and exits non-zero if anything fails:
 
 ## Credits
 
-The word list in `frontend/words.txt` comes from the en_US Hunspell dictionary in [SCOWL](http://wordlist.aspell.net), copyright Kevin Atkinson and others; its copyright and permission notices are in `frontend/words-LICENSE.txt`.
+The word list in `frontend/words.txt` comes from the en_US Hunspell dictionary in [SCOWL](http://wordlist.aspell.net); its copyright and permission notices are in `frontend/words-LICENSE.txt`.
 
 The sound-it-out spellings in `frontend/sounds.txt` are converted from the [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict), copyright Carnegie Mellon University; its notice is in `frontend/sounds-LICENSE.txt`.
 
