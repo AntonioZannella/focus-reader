@@ -47,7 +47,7 @@ One small server (`backend/server.py`, Python and Flask) delivers both the page 
 
 The browser handles captions, playback and the IndexedDB library. A Python/Flask server serves the page, extracts PDF text and calls edge-tts for audio and word timings. The container runs one Gunicorn worker with four threads.
 
-- **One worker:** the hosted app runs as one server process that handles up to four requests at once. Most of each speech request is waiting on Microsoft's speech service, so four at once is plenty for this app. One process uses little memory on Render's free tier. If an in-process rate limiter is used, keeping one worker also keeps its request counters together; this version does not yet include that limiter.
+- **One worker:** the hosted app runs as one server process that handles up to four requests at once. Most of each speech request is waiting on Microsoft's speech service, so four at once is plenty for this app. One process uses little memory on Render's free tier. Speech requests are rate-limited per IP. Keeping one worker keeps the in-memory request counters together; multiple workers or instances would need a shared counter store.
 - **edge-tts:** free, natural voices, and it reports when every word starts and ends, which the word highlighting depends on.
 - **If edge-tts changes or breaks:** it is unofficial and has already needed one update. The server tries up to three times, then returns a clear error: "The speech service didn't respond." There is no alternate speech provider built in. Audio already saved in the library still plays offline.
 
