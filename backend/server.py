@@ -266,8 +266,12 @@ def voice_sample(voice):
             return jsonify({"error": "The speech service didn't respond."}), 502
         finally:
             for leftover in (partial, partial + ".json"):
-                if os.path.exists(leftover):
+                try:
                     os.remove(leftover)
+                except FileNotFoundError:
+                    pass  # Another request or os.replace already removed it.
+                except OSError:
+                    app.logger.exception("Could not remove voice sample temporary file %s", leftover)
     response = send_from_directory(sample_dir, filename)
     response.headers["Cache-Control"] = "public, max-age=86400"
     return response

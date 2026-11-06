@@ -124,3 +124,20 @@ class AuditTests(unittest.TestCase):
             with self.assertLogs(server.app.logger, level='ERROR') as captured:
                 self.assertEqual(server.cleanup_old_outputs(), 0)
             self.assertTrue(captured.records[0].exc_info)
+
+    def test_sample_cleanup_tolerates_disappearing_files_and_logs_other_os_errors(self):
+        async def fake(text, audio, words, voice=None):
+            Path(audio).write_bytes(b'fake audio')
+            Path(words).write_text('[]')
+            return []
+        voices = iter(server.VOICES)
+        with patch.object(server, 'synthesize_to_files', side_effect=fake):
+            with patch('server.os.remove', side_effect=FileNotFoundError), patch.object(server.app.logger, 'exception') as log:
+                response = self.client.get('/voice-sample/' + next(voices))
+                self.assertEqual(response.status_code, 200)
+                log.assert_not_called()
+            with patch('server.os.remove', side_effect=PermissionError), self.assertLogs(server.app.logger, level='ERROR') as captured:
+                response = self.client.get('/voice-sample/' + next(voices))
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(len(captured.records), 2)
+                self.assertTrue(all(record.exc_info for record in captured.records))
