@@ -1,4 +1,4 @@
-# Focus Reader for Hugging Face Spaces (Docker SDK). One gunicorn process
+# Focus Reader in a container (Render, Cloud Run, Hugging Face). One gunicorn process
 # serves the page and the API on port 7860.
 #   docker build -t focus-reader .
 #   docker run --rm -p 7860:7860 focus-reader      then open http://localhost:7860/

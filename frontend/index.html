@@ -1363,6 +1363,7 @@
         <button aria-pressed="false" class="voice-button" data-voice="en-US-AndrewNeural">Andrew</button>
         <button aria-pressed="false" class="voice-button" data-voice="en-US-BrianNeural">Brian</button>
         <button aria-pressed="false" class="voice-button" data-voice="en-US-GuyNeural">Guy</button>
+        <button aria-pressed="false" class="voice-button" data-voice="en-US-AnaNeural">Ana (child)</button>
       </div>
     </div>
     <div class="audio-row">
@@ -1698,6 +1699,10 @@
     const SECTION_TARGET_WORDS = 450;
     const SECTION_MIN_WORDS = Math.round((SECTION_TARGET_WORDS * 2) / 3);
     const SECTION_MAX_WORDS = Math.round((SECTION_TARGET_WORDS * 4) / 3);
+    // Playback waits for the whole first section, so the opening sections
+    // are short (about 60, then 200 words) and audio starts within a couple
+    // of seconds; the next, longer ones are made while those play.
+    const OPENING_SECTION_TARGETS = [60, 200];
     // words ending in "." that don't end a sentence
     const ABBREVIATIONS = new Set([
       "mr.", "mrs.", "ms.", "dr.", "prof.", "st.", "jr.", "sr.", "vs.", "e.g.", "i.e.", "cf.", "al.",
@@ -1731,11 +1736,14 @@
     // [{wordStart, wordEnd}] (end exclusive) covering all of the document's words.
     function partitionDocument(documentRecord, target = SECTION_TARGET_WORDS) {
       const { words, text } = documentRecord;
-      const minWords = Math.round((target * 2) / 3);
-      const maxWords = Math.round((target * 4) / 3);
       const sections = [];
       let start = 0;
       while (start < words.length) {
+        const sectionTarget = target === SECTION_TARGET_WORDS && sections.length < OPENING_SECTION_TARGETS.length
+          ? OPENING_SECTION_TARGETS[sections.length]
+          : target;
+        const minWords = Math.round((sectionTarget * 2) / 3);
+        const maxWords = Math.round((sectionTarget * 4) / 3);
         const remaining = words.length - start;
         if (remaining <= maxWords) {
           sections.push({ wordStart: start, wordEnd: words.length });
@@ -1745,14 +1753,14 @@
         const lastEnd = Math.min(start + maxWords, words.length - minWords);
         for (let end = start + minWords; end <= lastEnd; end++) {
           const strength = boundaryStrength(words, text, end - 1);
-          const distance = Math.abs(end - (start + target));
+          const distance = Math.abs(end - (start + sectionTarget));
           if (!best || strength > best.strength || (strength === best.strength && distance < best.distance)) {
             best = { end, strength, distance };
           }
         }
         // no boundary at all (one very long sentence): cut at the target,
         // but still never leaving fewer than minWords behind
-        const end = best.strength > BOUNDARY_NONE ? best.end : Math.min(start + target, lastEnd);
+        const end = best.strength > BOUNDARY_NONE ? best.end : Math.min(start + sectionTarget, lastEnd);
         sections.push({ wordStart: start, wordEnd: end });
         start = end;
       }
@@ -2353,11 +2361,11 @@
       }
     });
 
-    async function runSynthesis(text) {
+    async function runSynthesis(text, voice = currentVoice) {
       const response = await fetch(BACKEND_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: currentVoice }),
+        body: JSON.stringify({ text, voice }),
       });
 
       if (!response.ok) {
@@ -2405,7 +2413,15 @@
 
     function isReady(index) {
       const section = player && player.sections[index];
-      return !!section && section.status === SECTION_READY && !!section.audioBlob && section.timings.length > 0;
+      return !!section && section.status === SECTION_READY && !!section.audioBlob && section.timings.length > 0
+        && inCurrentVoice(section);
+    }
+
+    // Audio made in another voice than the one picked now counts as not
+    // prepared, so it's made again. Sections saved before voices were
+    // remembered (no .voice) are kept as they are.
+    function inCurrentVoice(section) {
+      return section.voice === undefined || section.voice === currentVoice;
     }
 
     function currentSpeed() {
@@ -2668,10 +2684,12 @@
     // {section} or {outdated: error name} if the document was deleted or its
     // text changed meanwhile (the audio then matches nothing).
     async function prepareSection(documentRecord, section) {
-      const data = await runSynthesis(sectionText(documentRecord, section));
+      const voice = currentVoice; // the voice can change while this runs
+      const data = await runSynthesis(sectionText(documentRecord, section), voice);
       const audioBlob = await fetchAudioBlob(data.audio_url);
       const ready = makeReadySection(documentRecord.id, documentRecord, audioBlob, data.words,
         await measureAudioDuration(audioBlob), section);
+      ready.voice = voice;
       if (section.id !== undefined) {
         ready.id = section.id;
       }
@@ -2952,7 +2970,8 @@
         const target = Math.max(0, documentRecord.positionWordIndex);
         const index = Math.max(0, sections.indexOf(sectionForWord(sections, target)));
         const section = sections[index];
-        const ready = section.status === SECTION_READY && !!section.audioBlob && section.timings.length > 0;
+        const ready = section.status === SECTION_READY && !!section.audioBlob && section.timings.length > 0
+          && inCurrentVoice(section);
         if (!ready || forceResynthesize) {
           // its audio is prepared by the queue (first, before any lookahead),
           // and playback starts there once it's ready
@@ -3093,6 +3112,12 @@
           });
           if (target.sections[index] === section) {
             target.sections[index] = result.section;
+            // it may replace audio in another voice whose URL was made ahead
+            const oldUrl = player === target && index !== activeIndex ? sectionUrls.get(index) : null;
+            if (oldUrl) {
+              URL.revokeObjectURL(oldUrl);
+              sectionUrls.delete(index);
+            }
           }
           if (player === target) {
             sectionPrepared(index);
@@ -3156,6 +3181,9 @@
     function sectionPrepared(index) {
       if (!waitingFor || waitingFor.index !== index) {
         return;
+      }
+      if (!isReady(index)) {
+        return; // finished in a voice no longer picked: it's made again next
       }
       if (!wantsToPlay) {
         preparingNoticeText.textContent = "Ready. Press Play (or Space) to continue.";
@@ -3458,35 +3486,6 @@
           console.warn("The word list for prefix/suffix boxes couldn't be loaded:", error);
         });
     }
-    function showCaption(text) {
-      const education = document.body.classList.contains("mode-education");
-      const language = document.body.classList.contains("mode-language");
-      const key = (education ? "e:" : language ? `l${!!soundWords}:` : "n:") + text;
-      if (key === shownCaption) {
-        return;
-      }
-      shownCaption = key;
-      wordDisplay.textContent = "";
-      // every word gets its own .cw span, so highlightCaptionWord() can mark
-      // the one being spoken; spaces stay plain text between them
-      text.split(/(\s+)/).forEach((part) => {
-        if (!part || /^\s+$/.test(part)) {
-          wordDisplay.append(part);
-          return;
-        }
-        if (!education) {
-          const plain = document.createElement("span");
-          plain.className = "cw";
-          plain.append(language ? withPronunciation(part) : part);
-          wordDisplay.append(plain);
-          return;
-        }
-        const kind = new Array(part.length).fill(""); // by string index, like the rules
-        shortVowelIndexes(part).forEach((i) => { kind[i] = "short-vowel"; });
-        weldedRanges(part).forEach(([start, end]) => kind.fill("welded", start, end));
-        // which affix (prefix/suffix) each letter is in, -1 for none
-        const affix = new Array(part.length).fill(-1);
-        if (affixWords) {
     // Language mode: sound-it-out spellings (frontend/sounds.txt, word ->
     // "BRAH-kuh-lee"), loaded the first time Language mode is on; null until then.
     // ponytail: the whole 2.4 MB list is loaded at once (the browser caches
@@ -3532,6 +3531,35 @@
       ruby.append(word, rt);
       return ruby;
     }
+    function showCaption(text) {
+      const education = document.body.classList.contains("mode-education");
+      const language = document.body.classList.contains("mode-language");
+      const key = (education ? "e:" : language ? `l${!!soundWords}:` : "n:") + text;
+      if (key === shownCaption) {
+        return;
+      }
+      shownCaption = key;
+      wordDisplay.textContent = "";
+      // every word gets its own .cw span, so highlightCaptionWord() can mark
+      // the one being spoken; spaces stay plain text between them
+      text.split(/(\s+)/).forEach((part) => {
+        if (!part || /^\s+$/.test(part)) {
+          wordDisplay.append(part);
+          return;
+        }
+        if (!education) {
+          const plain = document.createElement("span");
+          plain.className = "cw";
+          plain.append(language ? withPronunciation(part) : part);
+          wordDisplay.append(plain);
+          return;
+        }
+        const kind = new Array(part.length).fill(""); // by string index, like the rules
+        shortVowelIndexes(part).forEach((i) => { kind[i] = "short-vowel"; });
+        weldedRanges(part).forEach(([start, end]) => kind.fill("welded", start, end));
+        // which affix (prefix/suffix) each letter is in, -1 for none
+        const affix = new Array(part.length).fill(-1);
+        if (affixWords) {
           affixRanges(part, (w) => affixWords.has(w)).forEach(([start, end], n) => affix.fill(n, start, end));
         }
         // colored runs: consecutive letters of the same kind in one span
@@ -4133,11 +4161,15 @@
     // The choice is remembered in this browser.
     function setMode(mode) {
       document.body.classList.toggle("mode-education", mode === "education");
+      document.body.classList.toggle("mode-language", mode === "language");
       document.querySelectorAll(".mode-tab").forEach((tab) => {
         tab.setAttribute("aria-selected", String(tab.dataset.mode === mode));
       });
       if (mode === "education") {
         loadAffixWords();
+      }
+      if (mode === "language") {
+        loadSoundWords();
       }
       updateWordDisplay(); // show the caption in this mode's style
       try {
@@ -4162,16 +4194,12 @@
     const themeToggle = document.getElementById("theme-toggle");
     const THEME_ORDER = ["system", "light", "dark"];
     const THEME_NAMES = { system: "System", light: "Light", dark: "Dark" };
-      document.body.classList.toggle("mode-language", mode === "language");
     function showTheme(theme) {
       const label = `Theme: ${THEME_NAMES[theme]}`;
       themeToggle.setAttribute("aria-label", label);
       themeToggle.title = label;
     }
     themeToggle.addEventListener("click", () => {
-      if (mode === "language") {
-        loadSoundWords();
-      }
       const current = document.documentElement.dataset.theme || "system";
       const theme = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
       if (theme === "system") {
@@ -4194,11 +4222,11 @@
 
     // Caption text size: scales the caption (and an equation shown in its
     // place) from the default size.
-    // Voice: picks the voice for audio made from now on, and plays a short
-    // sample ("Hi, I'm Ava.") so the reader can hear it.
-    // ponytail: audio already prepared (and saved in the library) keeps the
-    // voice it was made with; re-make a document's audio on a voice change if
-    // readers find mixed voices confusing.
+    // Voice: picks the voice and plays a short sample ("Hi, I'm Ava.") so the
+    // reader can hear it. If a document is open, its audio is made again in
+    // the new voice from the current word (playing on if it was playing);
+    // other sections are remade as playback reaches them, and saved audio in
+    // an older voice is remade when the document is opened.
     let currentVoice = "en-US-AvaNeural"; // the server's default too
     const voiceSamples = new Map(); // voice -> Promise of a blob URL
     const voiceSamplePlayer = new Audio();
@@ -4248,8 +4276,32 @@
         await loadVoiceSample(button.dataset.voice).catch(() => {});
       }
     }, 1500);
+    // Remakes the open document's current section in the picked voice, from
+    // the word being read; keeps playing or stays paused as before.
+    function switchOpenDocumentVoice() {
+      if (!player || activeIndex < 0 || !player.sections[activeIndex] || inCurrentVoice(player.sections[activeIndex])) {
+        return;
+      }
+      const wasPlaying = (!audioPlayer.paused || !!equationHold) && wantsToPlay;
+      const word = globalWordIndex(getCurrentWordIndexForPosition());
+      const index = Math.max(0, player.sections.indexOf(sectionForWord(player.sections, Math.max(0, word))));
+      requestSection(index, word >= 0 ? word : null, { regenerate: true, message: "Switching voice…" });
+      if (!wasPlaying && waitingFor) {
+        wantsToPlay = false;
+        setPlayPauseLabel("Play");
+        exitFocusMode();
+        showPreparingNotice("Switching voice… Press Play (or Space) to continue when it's ready.");
+      }
+    }
+    // the sample never talks over the reading
+    audioPlayer.addEventListener("play", () => voiceSamplePlayer.pause());
+
     document.querySelectorAll(".voice-button").forEach((button) => {
       button.addEventListener("click", () => {
+        if (button.dataset.voice === currentVoice) {
+          playVoiceSample(button);
+          return;
+        }
         currentVoice = button.dataset.voice;
         showVoice(currentVoice);
         try {
@@ -4257,7 +4309,11 @@
         } catch (error) {
           // storage unavailable: the choice just isn't remembered
         }
-        playVoiceSample(button);
+        const wasPlaying = !audioPlayer.paused;
+        switchOpenDocumentVoice();
+        if (!wasPlaying) {
+          playVoiceSample(button); // while playing, the new voice is the sample
+        }
       });
     });
     try {

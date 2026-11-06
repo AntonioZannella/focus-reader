@@ -17,6 +17,7 @@ VOICES = {
     "en-US-AndrewNeural": "Andrew",
     "en-US-BrianNeural": "Brian",
     "en-US-GuyNeural": "Guy",
+    "en-US-AnaNeural": "Ana",  # a child's voice
 }
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "test.mp3")
