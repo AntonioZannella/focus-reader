@@ -17,7 +17,7 @@ The look is meant to match captions on short videos: big, bold white text with a
 1. **Load a document.** Paste text, upload a .txt file, or upload a PDF (a research paper or a book).
 2. **Name it.** Every document gets a name you choose, like "Chapter 1" or "Chapter 20", and is saved to your library.
 3. **Press play.** The app creates a spoken version. Then the whole screen goes blank except the words being spoken, which change in time with the voice.
-4. **Press Space to pause.** The controls come back: the skip buttons, speed, group size, the text box, your library, and the full document. Press Space again and they disappear and it keeps reading.
+4. **Press Space (or tap the words on a phone or tablet) to pause.** The controls come back: the skip buttons, speed, group size, the text box, your library, and the full document. Press Space again and they disappear and it keeps reading.
 5. **Use the arrow keys.** Left Arrow goes back 10 seconds. Right Arrow goes forward 10 seconds.
 
 ---
@@ -104,5 +104,4 @@ A few terms:
 - It does not read equations aloud, and it does not show or describe figures and images. Tables are not handled specially and may sound odd.
 - It shows the text of a PDF, not the PDF's pages as they look.
 - One English voice for now.
-- Controls to bring the screen back are keyboard only (Space). There is no tap-to-pause for phones or tablets yet.
 - New audio needs an internet connection, because the speech is generated online.

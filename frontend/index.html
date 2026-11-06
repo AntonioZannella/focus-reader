@@ -4090,6 +4090,13 @@
       }
     }
     focusToggle.addEventListener("click", toggleFocusMode);
+    // Touch screens have no Space key: in focus mode, a tap on the caption
+    // pauses (and brings the controls back) the way Space does.
+    document.querySelector(".stage").addEventListener("click", (event) => {
+      if (document.body.classList.contains("focus-mode") && !event.target.closest("button")) {
+        togglePlayPause();
+      }
+    });
     window.addEventListener("keydown", (event) => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.repeat || isTypingTarget(event.target)) {
         return;
