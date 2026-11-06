@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # The live speech test needs Microsoft's online service; CI skips it.
+      SKIP_LIVE_TTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install dependencies
+        run: python -m pip install -r backend/requirements-dev.txt ruff==0.17.4
+      - name: Lint
+        run: ruff check .
+      - name: Python tests
+        run: python -m pytest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Node tests (alignment)
+        run: node --test tests/node/*.test.js

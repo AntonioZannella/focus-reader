@@ -1,5 +1,7 @@
 # Focus Reader
 
+[![CI](https://github.com/AntonioZannella/focus-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/AntonioZannella/focus-reader/actions/workflows/ci.yml)
+
 **Try it: <https://focus-reader.onrender.com>** (free hosting: the first visit after a quiet spell can take up to a minute to wake the server).
 
 Focus Reader reads a document out loud and shows only the word or few words being spoken, in large caption-style text on an otherwise empty screen. It's for people who lose their place or their focus when a page is full of text, even while listening along to an audiobook: instead of following the voice across a page, you only ever see what is being said right now. You can paste text, upload a `.txt` file or upload a PDF (including two-column research papers), and every document is saved in a library in your browser with its own reading position. [WHAT-IT-DOES.md](WHAT-IT-DOES.md) describes the features in plain language.
@@ -109,9 +111,11 @@ backend/venv/bin/python -m pip install -r backend/requirements-dev.txt   # adds 
 
 This runs three parts and exits non-zero if anything fails:
 
-- **Python** (`tests/python/`, pytest): word timings from the speech engine, PDF extraction on the small sample PDFs in `tests/fixtures/` (reading order, page numbers, header and footer removal, rejoined hyphenated words, equations), the server's cleanup of old audio, and the server delivering the page (only files from `frontend/`, never anything outside it) with relative audio links. One test calls the real speech service and is skipped when it can't be reached.
+- **Python** (`tests/python/`, pytest): word timings from the speech engine, PDF extraction on the small sample PDFs in `tests/fixtures/` (reading order, page numbers, header and footer removal, rejoined hyphenated words, equations), the server's cleanup of old audio, and the server delivering the page (only files from `frontend/`, never anything outside it) with relative audio links. One test calls the real speech service and is skipped when it can't be reached or when `SKIP_LIVE_TTS=1` is set.
 - **Node** (`tests/node/`, Node 22 or newer): matching the speech engine's words to the text on deliberately messy input.
 - **Browser** (`tests/browser/`, needs Google Chrome): runs the real page in headless Chrome with a fake speech service and silent audio, and checks the library, section playback, ranges, migration of older libraries, and that pauses, seeks and document switches always win over background work. Set `CHROME_PATH` to use another Chrome or Chromium.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check`, the Python tests and the Node tests on every push and pull request, with `SKIP_LIVE_TTS=1`; the browser tests run locally.
 
 `run-tests.sh` is a POSIX shell script; on Windows, run it from Git Bash or WSL, or run the three commands inside it one by one.
 

@@ -63,7 +63,10 @@ def test_saved_synthesis_output_has_consistent_timings():
 def test_live_synthesize_endpoint(tmp_path, monkeypatch):
     # The same checks on a fresh /synthesize response, through Flask's test
     # client. Needs the online speech service, so it's skipped when that
-    # can't be reached (offline, or a sandbox without network).
+    # can't be reached (offline, or a sandbox without network), or when
+    # SKIP_LIVE_TTS=1 is set (as in CI).
+    if os.environ.get("SKIP_LIVE_TTS") == "1":
+        pytest.skip("SKIP_LIVE_TTS=1: the live speech test is turned off")
     monkeypatch.setattr(server, "OUTPUT_DIR", str(tmp_path))
     monkeypatch.setitem(server.app.config, "TESTING", True)  # errors raise, not 500
     client = server.app.test_client()
