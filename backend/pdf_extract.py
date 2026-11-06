@@ -15,6 +15,7 @@ Usage: python pdf_extract.py paper.pdf [--words 500] [--json out.json]
 """
 
 import argparse
+import itertools
 import json
 import re
 import statistics
@@ -131,8 +132,8 @@ def _page_blocks(page):
 def _same_printed_line(previous, current):
     """Whether line bbox `current` continues `previous` on the same printed
     line: it starts to the right of it and they share most of their height."""
-    px0, py0, px1, py1 = previous
-    x0, y0, x1, y1 = current
+    _, py0, px1, py1 = previous
+    x0, y0, _, y1 = current
     shared = min(py1, y1) - max(py0, y0)
     return x0 >= px1 - 1 and shared >= 0.7 * min(py1 - py0, y1 - y0)
 
@@ -232,7 +233,7 @@ def _order_blocks(blocks, columns):
     # continuation lines.)
     gutters = [
         (left_end, right_start) if left_end < right_start else (right_start, right_start)
-        for (_, left_end), (right_start, _) in zip(columns, columns[1:])
+        for (_, left_end), (right_start, _) in itertools.pairwise(columns)
     ]
     spanning, in_columns = [], []
     for block in blocks:

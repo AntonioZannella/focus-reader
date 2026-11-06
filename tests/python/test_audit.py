@@ -1,12 +1,13 @@
 """Audit regressions use stdlib unittest and offline speech stubs."""
-from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
 import server
 
 
@@ -45,10 +46,10 @@ class AuditTests(unittest.TestCase):
             self.assertEqual(self.client.get(sample, headers=one).status_code, 200)  # cached, no service call
             self.assertEqual(self.client.post('/synthesize', json={'text': 'Hello'}, headers=two).status_code, 200)
             self.assertEqual(speech.call_count, 3)
-        with patch.dict(os.environ, {'RENDER': ''}):
-            with server.app.test_request_context(headers={'CF-Connecting-IP': '1.2.3.4', 'X-Forwarded-For': '5.6.7.8'},
-                                                 environ_base={'REMOTE_ADDR': '127.0.0.1'}):
-                self.assertEqual(server.speech_client_ip(), '127.0.0.1')
+        with patch.dict(os.environ, {'RENDER': ''}), \
+                server.app.test_request_context(headers={'CF-Connecting-IP': '1.2.3.4', 'X-Forwarded-For': '5.6.7.8'},
+                                                environ_base={'REMOTE_ADDR': '127.0.0.1'}):
+            self.assertEqual(server.speech_client_ip(), '127.0.0.1')
         limiter = server.SpeechLimiter(limit=2, max_clients=1)
         with patch('server.time.monotonic', return_value=100):
             with ThreadPoolExecutor(max_workers=8) as pool:

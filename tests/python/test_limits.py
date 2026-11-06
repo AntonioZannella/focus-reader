@@ -5,12 +5,11 @@ in gunicorn's worker threads (each with its own asyncio event loop)."""
 import asyncio
 import io
 import json
-import os
 import re
 import threading
+from pathlib import Path
 
 import pytest
-
 import server
 from conftest import ROOT
 
@@ -24,10 +23,8 @@ def fake_synthesis(tmp_path, monkeypatch):
         calls.append(text)
         await asyncio.sleep(0.2)
         words = [{"word": w, "start_ms": i * 100.0, "end_ms": i * 100.0 + 90} for i, w in enumerate(text.split())]
-        with open(mp3_path, "wb") as f:
-            f.write(b"\xff\xf3fake")
-        with open(words_path, "w") as f:
-            json.dump(words, f)
+        Path(mp3_path).write_bytes(b"\xff\xf3fake")
+        Path(words_path).write_text(json.dumps(words))
         return words
 
     monkeypatch.setattr(server, "OUTPUT_DIR", str(tmp_path))
@@ -59,7 +56,7 @@ def test_upload_over_the_limit_gets_a_json_413():
 
 def test_page_and_server_share_the_same_pdf_limit():
     # the page checks the size before uploading; both limits must stay equal
-    page = open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+    page = Path(ROOT, "frontend", "index.html").read_text(encoding="utf-8")
     match = re.search(r"const MAX_PDF_BYTES = (\d+) \* 1024 \* 1024;", page)
     assert match and int(match.group(1)) * 1024 * 1024 == server.MAX_UPLOAD_BYTES == server.app.config["MAX_CONTENT_LENGTH"]
 
@@ -74,7 +71,7 @@ def test_concurrent_synthesis_in_threads(fake_synthesis):
         try:
             response = server.app.test_client().post("/synthesize", json={"text": f"Request number {n} reads aloud."})
             results.append(response.status_code)
-        except Exception as error:  # pragma: no cover - reported below
+        except Exception as error:  # noqa: BLE001 - any failure in the thread is reported below
             errors.append(repr(error))
 
     threads = [threading.Thread(target=call, args=(n,)) for n in range(8)]

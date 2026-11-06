@@ -50,26 +50,31 @@ async def synthesize_to_files(text, mp3_path, words_path, voice=VOICE):
 async def _synthesize_once(text, mp3_path, words_path, voice):
     communicate = edge_tts.Communicate(text, voice, boundary="WordBoundary")
 
-    words = []
-    with open(mp3_path, "wb") as audio_file:
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_file.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                start_ms = chunk["offset"] / TICKS_PER_MS
-                end_ms = (chunk["offset"] + chunk["duration"]) / TICKS_PER_MS
-                words.append(
-                    {
-                        "word": chunk["text"],
-                        "start_ms": start_ms,
-                        "end_ms": end_ms,
-                    }
-                )
+    audio, words = [], []
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio.append(chunk["data"])
+        elif chunk["type"] == "WordBoundary":
+            start_ms = chunk["offset"] / TICKS_PER_MS
+            end_ms = (chunk["offset"] + chunk["duration"]) / TICKS_PER_MS
+            words.append(
+                {
+                    "word": chunk["text"],
+                    "start_ms": start_ms,
+                    "end_ms": end_ms,
+                }
+            )
 
+    # Files are written in a worker thread, so disk I/O never blocks the event loop.
+    await asyncio.to_thread(_write_files, mp3_path, b"".join(audio), words_path, words)
+    return words
+
+
+def _write_files(mp3_path, audio, words_path, words):
+    with open(mp3_path, "wb") as audio_file:
+        audio_file.write(audio)
     with open(words_path, "w", encoding="utf-8") as words_file:
         json.dump(words, words_file, indent=2)
-
-    return words
 
 
 async def main():

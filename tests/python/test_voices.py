@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import server
 import tts_script
 
@@ -14,7 +16,7 @@ def test_chosen_voice_reaches_the_speech_service(tmp_path, monkeypatch):
 
     async def fake_synthesize(text, mp3_path, words_path, voice):
         seen["voice"] = voice
-        open(mp3_path, "wb").close()
+        Path(mp3_path).touch()
         return []
 
     monkeypatch.setattr(server, "OUTPUT_DIR", str(tmp_path))
@@ -27,8 +29,8 @@ def test_chosen_voice_reaches_the_speech_service(tmp_path, monkeypatch):
 
 
 def test_every_voice_button_is_an_allowed_voice():
-    import os, re
-    page = open(os.path.join(os.path.dirname(server.__file__), "..", "frontend", "index.html"), encoding="utf-8").read()
+    import re
+    page = Path(server.__file__).parent.parent.joinpath("frontend", "index.html").read_text(encoding="utf-8")
     buttons = set(re.findall(r'class="voice-button[^"]*" data-voice="([^"]+)"', page))
     assert buttons and buttons <= set(tts_script.VOICES)
 
@@ -38,9 +40,8 @@ def test_voice_sample_is_made_once_then_served_from_disk(tmp_path, monkeypatch):
 
     async def fake_synthesize(text, mp3_path, words_path, voice):
         calls.append((text, voice))
-        with open(mp3_path, "wb") as f:
-            f.write(b"ID3fake")
-        open(words_path, "w").close()
+        Path(mp3_path).write_bytes(b"ID3fake")
+        Path(words_path).touch()
         return []
 
     monkeypatch.setattr(server, "OUTPUT_DIR", str(tmp_path))

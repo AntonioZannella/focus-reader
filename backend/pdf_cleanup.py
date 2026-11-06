@@ -26,7 +26,8 @@ import statistics
 import sys
 from collections import Counter, defaultdict
 
-from pdf_academic import find_equations, remove_inline_math, strip_citations as remove_citations
+from pdf_academic import find_equations, remove_inline_math
+from pdf_academic import strip_citations as remove_citations
 from pdf_extract import extract_pdf
 
 # Lines whose center is within this share of the page height from the top or

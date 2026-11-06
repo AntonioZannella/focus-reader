@@ -4,7 +4,6 @@
 import os
 
 import pytest
-
 from conftest import FIXTURES
 from pdf_cleanup import process_pdf
 

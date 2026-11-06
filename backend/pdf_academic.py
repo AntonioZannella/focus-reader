@@ -90,7 +90,7 @@ def _is_letter(ch):
     if not ch.isalpha():
         return False
     name = unicodedata.name(ch, "")
-    return not (name.startswith("GREEK") or name.startswith("MATHEMATICAL"))
+    return not name.startswith(("GREEK", "MATHEMATICAL"))
 
 
 def _is_operator(ch):
@@ -227,9 +227,10 @@ def remove_inline_math(clean):
     is_math = [_is_math_word(core) for core in cores]
     # operators join a run when they sit next to a math word
     for i, core in enumerate(cores):
-        if not is_math[i] and _is_operator_word(core):
-            if (i > 0 and is_math[i - 1]) or (i + 1 < len(words) and _is_math_word(cores[i + 1])):
-                is_math[i] = True
+        if not is_math[i] and _is_operator_word(core) and (
+            (i > 0 and is_math[i - 1]) or (i + 1 < len(words) and _is_math_word(cores[i + 1]))
+        ):
+            is_math[i] = True
 
     def text_of(i, j):
         return clean["text"][words[i]["start"]:words[j]["end"]]

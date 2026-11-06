@@ -3,9 +3,9 @@ the app can be hosted at a single public URL."""
 
 import json
 import os
+from pathlib import Path
 
 import pytest
-
 import server
 
 
@@ -47,10 +47,8 @@ def test_audio_link_is_relative(client, monkeypatch):
     # synthesizer keeps this offline.
     async def fake_synthesize(text, mp3_path, words_path, voice=None):
         words = [{"word": w, "start_ms": i * 100.0, "end_ms": i * 100.0 + 90} for i, w in enumerate(text.split())]
-        with open(mp3_path, "wb") as f:
-            f.write(b"\xff\xf3fake")
-        with open(words_path, "w") as f:
-            json.dump(words, f)
+        Path(mp3_path).write_bytes(b"\xff\xf3fake")
+        Path(words_path).write_text(json.dumps(words))
         return words
 
     monkeypatch.setattr(server, "synthesize_to_files", fake_synthesize)

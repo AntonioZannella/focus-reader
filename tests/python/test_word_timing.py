@@ -1,12 +1,12 @@
 """Word timings from the speech engine: the captions depend on them being the
 text's words, in order, with sensible times that fit inside the audio."""
 
+import itertools
 import json
 import os
 import re
 
 import pytest
-
 import server
 import tts_script
 
@@ -41,7 +41,7 @@ def check_timings(words, text, duration_ms):
     # 2. each word has a positive length, and starts and ends strictly increase
     for w in words:
         assert w["end_ms"] > w["start_ms"]
-    for previous, current in zip(words, words[1:]):
+    for previous, current in itertools.pairwise(words):
         assert current["start_ms"] > previous["start_ms"]
         assert current["end_ms"] > previous["end_ms"]
     # 3. the last word ends inside the audio, followed only by the trailing
