@@ -43,10 +43,10 @@ You need:
 - **A desktop browser** (developed and tested with Google Chrome)
 - **An internet connection** to generate new audio
 
-Get the code and install the server's requirements in a virtual environment:
+Copy this repository's clone URL from GitHub's **Code** button and replace `<repository-url>` below. Install the server's requirements in a virtual environment:
 
 ```bash
-git clone https://github.com/AntonioZannella/focus-reader.git
+git clone <repository-url> focus-reader
 cd focus-reader/backend
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
@@ -110,7 +110,7 @@ This runs three parts and exits non-zero if anything fails:
 
 ## Credits
 
-The word list in `frontend/words.txt` comes from the en_US Hunspell dictionary in [SCOWL](http://wordlist.aspell.net), copyright Kevin Atkinson and others; its copyright and permission notices are in `frontend/words-LICENSE.txt`.
+The word list in `frontend/words.txt` comes from the en_US Hunspell dictionary in [SCOWL](http://wordlist.aspell.net); its copyright and permission notices are in `frontend/words-LICENSE.txt`.
 
 The sound-it-out spellings in `frontend/sounds.txt` are converted from the [CMU Pronouncing Dictionary](https://github.com/cmusphinx/cmudict), copyright Carnegie Mellon University; its notice is in `frontend/sounds-LICENSE.txt`.
 
