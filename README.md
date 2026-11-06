@@ -1,5 +1,7 @@
 # Focus Reader
 
+**Try it: <https://focus-reader.onrender.com>** (free hosting: the first visit after a quiet spell can take up to a minute to wake the server).
+
 Focus Reader reads a document out loud and shows only the word or few words being spoken, in large caption-style text on an otherwise empty screen. It's for people who lose their place or their focus when a page is full of text, even while listening along to an audiobook: instead of following the voice across a page, you only ever see what is being said right now. You can paste text, upload a `.txt` file or upload a PDF (including two-column research papers), and every document is saved in a library in your browser with its own reading position. [WHAT-IT-DOES.md](WHAT-IT-DOES.md) describes the features in plain language.
 
 **Privacy:** there are no accounts and no tracking. Your documents and library stay in your own browser. To make audio, the text being read is sent to Microsoft's online speech service (through edge-tts); the server keeps the audio files for an hour and then deletes them.
